@@ -14,6 +14,7 @@ import javax.persistence.UniqueConstraint;
 import javax.validation.constraints.NotNull;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 @Entity(name = "subscription_table")
 @Table(uniqueConstraints = @UniqueConstraint(columnNames = {"student_id", "room_id"}))
@@ -77,11 +78,15 @@ public class Subscription
 		this.room = room;
 	}
 	
-	public Long getStudentId() {
+	// Not named getStudentId()/getRoomId(): Spring Data would read findByRoomId as
+	// that getter instead of room.id and fail at startup.
+	@JsonProperty("studentId")
+	public Long studentId() {
 		return student == null ? null : student.getId();
 	}
 	
-	public Long getRoomId() {
+	@JsonProperty("roomId")
+	public Long roomId() {
 		return room == null ? null : room.getId();
 	}
 
@@ -95,7 +100,7 @@ public class Subscription
 
 	@Override
 	public String toString() {
-		return "Subscription [id=" + id + ", studentId=" + getStudentId() + ", roomId=" + getRoomId() + ", createdAt="
+		return "Subscription [id=" + id + ", studentId=" + studentId() + ", roomId=" + roomId() + ", createdAt="
 				+ createdAt + "]";
 	}
 	

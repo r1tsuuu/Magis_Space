@@ -15,6 +15,7 @@ import javax.persistence.ManyToOne;
 import javax.validation.constraints.NotNull;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 // Placeholder for marking rooms occupied during classes. Not used by any endpoint yet.
 @Entity(name = "class_schedule_table")
@@ -80,7 +81,10 @@ public class ClassSchedule
 		this.room = room;
 	}
 	
-	public Long getRoomId() {
+	// Not named getRoomId(): Spring Data would read findByRoomId as
+	// that getter instead of room.id and fail at startup.
+	@JsonProperty("roomId")
+	public Long roomId() {
 		return room == null ? null : room.getId();
 	}
 
@@ -118,7 +122,7 @@ public class ClassSchedule
 
 	@Override
 	public String toString() {
-		return "ClassSchedule [id=" + id + ", roomId=" + getRoomId() + ", courseCode=" + courseCode + ", dayOfWeek="
+		return "ClassSchedule [id=" + id + ", roomId=" + roomId() + ", courseCode=" + courseCode + ", dayOfWeek="
 				+ dayOfWeek + ", startTime=" + startTime + ", endTime=" + endTime + "]";
 	}
 	

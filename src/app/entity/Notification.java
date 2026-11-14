@@ -12,6 +12,7 @@ import javax.persistence.ManyToOne;
 import javax.validation.constraints.NotNull;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 @Entity(name = "notification_table")
 public class Notification 
@@ -85,11 +86,15 @@ public class Notification
 		this.room = room;
 	}
 	
-	public Long getStudentId() {
+	// Not named getStudentId()/getRoomId(): Spring Data would read findByRoomId as
+	// that getter instead of room.id and fail at startup.
+	@JsonProperty("studentId")
+	public Long studentId() {
 		return student == null ? null : student.getId();
 	}
 	
-	public Long getRoomId() {
+	@JsonProperty("roomId")
+	public Long roomId() {
 		return room == null ? null : room.getId();
 	}
 
@@ -119,7 +124,7 @@ public class Notification
 
 	@Override
 	public String toString() {
-		return "Notification [id=" + id + ", studentId=" + getStudentId() + ", roomId=" + getRoomId() + ", message="
+		return "Notification [id=" + id + ", studentId=" + studentId() + ", roomId=" + roomId() + ", message="
 				+ message + ", createdAt=" + createdAt + ", read=" + read + "]";
 	}
 	
