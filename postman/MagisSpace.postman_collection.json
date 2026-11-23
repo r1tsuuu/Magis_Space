@@ -1,0 +1,4230 @@
+{
+	"info": {
+		"name": "Magis Space API",
+		"description": "REST API for finding vacant study rooms. Run the whole collection top to bottom (Collection Runner or newman) against a fresh database with the mock SMS server running. Folders: Setup, then one folder per controller, then Cleanup. Change baseUrl if the app runs on another port.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Setup",
+			"description": "Looks up seeded ids and sets per-run values. Run these first. They change no data.",
+			"item": [
+				{
+					"name": "Setup - run id, today and tomorrow",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/amenities",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"amenities"
+							]
+						},
+						"description": "Sets the collection variables run (unique suffix for this run), today and tomorrow (day names in the machine time zone). Also reads the amenity list and stores the id of the seeded \"Outlets\" amenity as outletsId.\nInput: none. Output: array of amenities. Errors: none."
+					},
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"var days = [\"SUNDAY\",\"MONDAY\",\"TUESDAY\",\"WEDNESDAY\",\"THURSDAY\",\"FRIDAY\",\"SATURDAY\"];",
+									"var d = new Date();",
+									"pm.collectionVariables.set(\"run\", String(Date.now()));",
+									"pm.collectionVariables.set(\"today\", days[d.getDay()]);",
+									"pm.collectionVariables.set(\"tomorrow\", days[(d.getDay() + 1) % 7]);"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+									"var outlets = pm.response.json().find(function (a) { return a.name === \"Outlets\"; });",
+									"pm.test(\"Seeded Outlets amenity exists\", function () { pm.expect(outlets).to.exist; });",
+									"pm.collectionVariables.set(\"outletsId\", outlets.id);"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Setup - find seeded student",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/students",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"students"
+							]
+						},
+						"description": "Finds the seeded student (juan.delacruz@example.com) and stores the id as seedStudentId. This student is used as the reporter and is never deleted.\nInput: none. Output: array of students. Errors: none."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+									"var s = pm.response.json().find(function (x) { return x.email === \"juan.delacruz@example.com\"; });",
+									"pm.test(\"Seeded student exists\", function () { pm.expect(s).to.exist; });",
+									"pm.collectionVariables.set(\"seedStudentId\", s.id);"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Setup - find seeded room F-204",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/rooms?building=Faura",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"rooms"
+							],
+							"query": [
+								{
+									"key": "building",
+									"value": "Faura"
+								}
+							]
+						},
+						"description": "Finds the seeded room F-204 in Faura and stores its id as seedRoomId. It is only read, never changed.\nInput: query building. Output: array of rooms. Errors: none."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+									"var rm = pm.response.json().find(function (x) { return x.name === \"F-204\"; });",
+									"pm.test(\"Seeded room F-204 exists\", function () { pm.expect(rm).to.exist; });",
+									"pm.collectionVariables.set(\"seedRoomId\", rm.id);"
+								]
+							}
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Rooms",
+			"description": "RoomController: /rooms",
+			"item": [
+				{
+					"name": "List rooms",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/rooms",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"rooms"
+							]
+						},
+						"description": "Lists all rooms with live status.\nInput: optional query building, minCapacity (positive integer), amenity (name).\nOutput: array of Room objects (status, predictedVacant, lastReportedAt, minutesAgo).\nErrors: 400 if minCapacity is not a positive number."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+									"pm.test(\"Returns an array with the seeded rooms\", function () { var j = pm.response.json(); pm.expect(j).to.be.an(\"array\"); pm.expect(j.length).to.be.at.least(7); pm.expect(j[0]).to.have.all.keys(\"id\",\"name\",\"building\",\"floor\",\"capacity\",\"mapX\",\"mapY\",\"latitude\",\"longitude\",\"amenities\",\"status\",\"predictedVacant\",\"lastReportedAt\",\"minutesAgo\"); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "List rooms - filtered",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/rooms?building=Faura&minCapacity=30&amenity=Outlets",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"rooms"
+							],
+							"query": [
+								{
+									"key": "building",
+									"value": "Faura"
+								},
+								{
+									"key": "minCapacity",
+									"value": "30"
+								},
+								{
+									"key": "amenity",
+									"value": "Outlets"
+								}
+							]
+						},
+						"description": "Filters by building, minimum capacity and amenity name. All filters are optional and combine with AND.\nInput: query building, minCapacity, amenity.\nOutput: array of Room objects.\nErrors: 400 for a bad minCapacity."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+									"pm.test(\"Every room matches the filters\", function () { var j = pm.response.json(); pm.expect(j.length).to.be.at.least(1); j.forEach(function (x) { pm.expect(x.building).to.eql(\"Faura\"); pm.expect(x.capacity).to.be.at.least(30); pm.expect(x.amenities).to.include(\"Outlets\"); }); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "List rooms - bad minCapacity (400)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/rooms?minCapacity=abc",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"rooms"
+							],
+							"query": [
+								{
+									"key": "minCapacity",
+									"value": "abc"
+								}
+							]
+						},
+						"description": "minCapacity must be a positive number. \"abc\", \"0\" and negative values return 400.\nErrors: 400."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 400\", function () { pm.response.to.have.status(400); });",
+									"pm.test(\"Error body has status 400, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(400);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Create room",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/rooms",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"rooms"
+							]
+						},
+						"description": "Creates a room. Required: name (max 50 chars), building, floor (>= 0), capacity (>= 1). Optional: mapX, mapY, latitude, longitude, amenityId (one), amenityIds (list) or amenities (names).\nOutput: Room object. A new room has status NO_DATA.\nErrors: 422 invalid fields, 404 unknown amenity, 409 same name in the same building.\nSaves roomId.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"PM-A {{run}}\",\n  \"building\": \"Faura\",\n  \"floor\": 2,\n  \"capacity\": 20,\n  \"mapX\": 110,\n  \"mapY\": 40,\n  \"latitude\": 14.6399,\n  \"longitude\": 121.0774,\n  \"amenityId\": {{outletsId}}\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 201\", function () { pm.response.to.have.status(201); });",
+									"var j = pm.response.json();",
+									"pm.test(\"Room created with Outlets and NO_DATA\", function () { pm.expect(j.name).to.eql(\"PM-A \" + pm.collectionVariables.get(\"run\")); pm.expect(j.amenities).to.eql([\"Outlets\"]); pm.expect(j.status).to.eql(\"NO_DATA\"); pm.expect(j.minutesAgo).to.eql(null); });",
+									"pm.collectionVariables.set(\"roomId\", j.id);",
+									"pm.collectionVariables.set(\"roomName\", j.name);"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Create room - second room",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/rooms",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"rooms"
+							]
+						},
+						"description": "Creates a second Faura room (with Outlets) that is used for the VACANT report, so the reporter does not hit the 10-minute rule.\nSaves roomId2 and roomName2.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"PM-B {{run}}\",\n  \"building\": \"Faura\",\n  \"floor\": 2,\n  \"capacity\": 20,\n  \"mapX\": 110,\n  \"mapY\": 40,\n  \"latitude\": 14.64,\n  \"longitude\": 121.0773,\n  \"amenityId\": {{outletsId}}\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 201\", function () { pm.response.to.have.status(201); });",
+									"var j = pm.response.json();",
+									"pm.collectionVariables.set(\"roomId2\", j.id);",
+									"pm.collectionVariables.set(\"roomName2\", j.name);"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Create room - disposable",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/rooms",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"rooms"
+							]
+						},
+						"description": "Creates a room that is deleted again in this folder (see Delete room). Uses amenities by name to show that form of input.\nSaves tempRoomId.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"PM-T {{run}}\",\n  \"building\": \"Temp\",\n  \"floor\": 0,\n  \"capacity\": 1,\n  \"amenities\": [\n    \"Aircon\",\n    \"Whiteboard\"\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 201\", function () { pm.response.to.have.status(201); });",
+									"var j = pm.response.json();",
+									"pm.test(\"Amenities are returned by name\", function () { pm.expect(j.amenities).to.have.members([\"Aircon\",\"Whiteboard\"]); pm.expect(j.mapX).to.eql(null); });",
+									"pm.collectionVariables.set(\"tempRoomId\", j.id);"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Create room - duplicate (409)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/rooms",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"rooms"
+							]
+						},
+						"description": "A room name must be unique within its building. Same name and building as the room created above.\nErrors: 409.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"PM-A {{run}}\",\n  \"building\": \"Faura\",\n  \"floor\": 2,\n  \"capacity\": 20,\n  \"mapX\": 110,\n  \"mapY\": 40,\n  \"latitude\": 14.6399,\n  \"longitude\": 121.0774,\n  \"amenityId\": {{outletsId}}\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 409\", function () { pm.response.to.have.status(409); });",
+									"pm.test(\"Error body has status 409, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(409);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Create room - validation (422)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/rooms",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"rooms"
+							]
+						},
+						"description": "Blank name and capacity below 1 are rejected.\nErrors: 422, message lists the failing fields.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"\",\n  \"building\": \"Faura\",\n  \"floor\": 1,\n  \"capacity\": 0\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 422\", function () { pm.response.to.have.status(422); });",
+									"pm.test(\"Error body has status 422, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(422);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});",
+									"pm.test(\"Message names the fields\", function () { var m = pm.response.json().message; pm.expect(m).to.include(\"name\"); pm.expect(m).to.include(\"capacity\"); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Create room - amenity not found (404)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/rooms",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"rooms"
+							]
+						},
+						"description": "amenityId that does not exist.\nErrors: 404.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"PM-X {{run}}\",\n  \"building\": \"Faura\",\n  \"floor\": 2,\n  \"capacity\": 20,\n  \"mapX\": 110,\n  \"mapY\": 40,\n  \"latitude\": 14.6399,\n  \"longitude\": 121.0774,\n  \"amenityId\": 99999\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 404\", function () { pm.response.to.have.status(404); });",
+									"pm.test(\"Error body has status 404, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(404);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Create room - malformed JSON (400)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/rooms",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"rooms"
+							]
+						},
+						"description": "A body that is not valid JSON is rejected with a JSON error body.\nErrors: 400.",
+						"body": {
+							"mode": "raw",
+							"raw": "{ \"name\": ",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 400\", function () { pm.response.to.have.status(400); });",
+									"pm.test(\"Error body has status 400, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(400);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Get room",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/rooms/{{roomId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"rooms",
+								"{{roomId}}"
+							]
+						},
+						"description": "One room with live status.\nInput: path id. Output: Room object. Errors: 404 unknown id."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+									"pm.test(\"Is the room created earlier\", function () { var j = pm.response.json(); pm.expect(j.id).to.eql(Number(pm.collectionVariables.get(\"roomId\"))); pm.expect(j.building).to.eql(\"Faura\"); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Get room - not found (404)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/rooms/99999",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"rooms",
+								"99999"
+							]
+						},
+						"description": "Unknown room id.\nErrors: 404 \"Room with ID 99999 does not exist.\""
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 404\", function () { pm.response.to.have.status(404); });",
+									"pm.test(\"Error body has status 404, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(404);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});",
+									"pm.test(\"Message\", function () { pm.expect(pm.response.json().message).to.eql(\"Room with ID 99999 does not exist.\"); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Delete room",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/rooms/{{tempRoomId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"rooms",
+								"{{tempRoomId}}"
+							]
+						},
+						"description": "Deletes a room together with its reports and schedules.\nInput: path id. Output: empty. Errors: 404 unknown id."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 204\", function () { pm.response.to.have.status(204); });",
+									"pm.test(\"Empty body\", function () { pm.expect(pm.response.text()).to.eql(\"\"); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Delete room - already deleted (404)",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/rooms/{{tempRoomId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"rooms",
+								"{{tempRoomId}}"
+							]
+						},
+						"description": "Deleting the same room twice.\nErrors: 404."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 404\", function () { pm.response.to.have.status(404); });",
+									"pm.test(\"Error body has status 404, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(404);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Room history - not found (404)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/rooms/99999/history",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"rooms",
+								"99999",
+								"history"
+							]
+						},
+						"description": "Hourly history of an unknown room.\nErrors: 404."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 404\", function () { pm.response.to.have.status(404); });",
+									"pm.test(\"Error body has status 404, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(404);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});"
+								]
+							}
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Availability",
+			"description": "ReportController: /availability, plus the per-room report and history endpoints",
+			"item": [
+				{
+					"name": "Submit report - occupied",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/availability",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"availability"
+							]
+						},
+						"description": "Reports a room as occupied (occupied=true) or vacant (false). reportedAt and verified are set by the server.\nInput: roomId, studentId, occupied.\nOutput: Report object.\nErrors: 422 missing fields, 404 unknown student or room, 409 the same student reported the same room less than 10 minutes ago.\nUses the seeded student on the room created in this run, so the 10-minute rule does not interfere. Saves reportId.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"roomId\": {{roomId}},\n  \"studentId\": {{seedStudentId}},\n  \"occupied\": true\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 201\", function () { pm.response.to.have.status(201); });",
+									"var j = pm.response.json();",
+									"pm.test(\"Report fields\", function () { pm.expect(j.occupied).to.eql(true); pm.expect(j.verified).to.eql(true); pm.expect(j.roomId).to.eql(Number(pm.collectionVariables.get(\"roomId\"))); pm.expect(j.reportedAt).to.be.a(\"string\"); });",
+									"pm.collectionVariables.set(\"reportId\", j.id);"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Room status is OCCUPIED",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/rooms/{{roomId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"rooms",
+								"{{roomId}}"
+							]
+						},
+						"description": "The room now shows the latest report.\nOutput: Room object with status OCCUPIED, minutesAgo and lastReportedAt set."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+									"pm.test(\"OCCUPIED, predictedVacant false\", function () { var j = pm.response.json(); pm.expect(j.status).to.eql(\"OCCUPIED\"); pm.expect(j.predictedVacant).to.eql(false); pm.expect(j.minutesAgo).to.be.within(0, 1); pm.expect(j.lastReportedAt).to.be.a(\"string\"); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Submit report - too soon (409)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/availability",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"availability"
+							]
+						},
+						"description": "The same student reporting the same room again within 10 minutes.\nErrors: 409.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"roomId\": {{roomId}},\n  \"studentId\": {{seedStudentId}},\n  \"occupied\": false\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 409\", function () { pm.response.to.have.status(409); });",
+									"pm.test(\"Error body has status 409, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(409);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Submit report - vacant",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/availability",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"availability"
+							]
+						},
+						"description": "A vacant report on the second room. The seeded subscription (student watches Faura rooms with Outlets) matches, so the server saves a notification for that student and sends an SMS to the mock server. Saves reportId2.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"roomId\": {{roomId2}},\n  \"studentId\": {{seedStudentId}},\n  \"occupied\": false\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 201\", function () { pm.response.to.have.status(201); });",
+									"var j = pm.response.json();",
+									"pm.test(\"Vacant report\", function () { pm.expect(j.occupied).to.eql(false); });",
+									"pm.collectionVariables.set(\"reportId2\", j.id);"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Room status is VACANT",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/rooms/{{roomId2}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"rooms",
+								"{{roomId2}}"
+							]
+						},
+						"description": "Status after a vacant report is VACANT."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+									"pm.test(\"VACANT\", function () { pm.expect(pm.response.json().status).to.eql(\"VACANT\"); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Submit report - missing fields (422)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/availability",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"availability"
+							]
+						},
+						"description": "roomId, studentId and occupied are required.\nErrors: 422.",
+						"body": {
+							"mode": "raw",
+							"raw": "{}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 422\", function () { pm.response.to.have.status(422); });",
+									"pm.test(\"Error body has status 422, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(422);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Submit report - student not found (404)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/availability",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"availability"
+							]
+						},
+						"description": "Unknown studentId.\nErrors: 404.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"roomId\": {{roomId}},\n  \"studentId\": 99999,\n  \"occupied\": true\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 404\", function () { pm.response.to.have.status(404); });",
+									"pm.test(\"Error body has status 404, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(404);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Submit report - room not found (404)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/availability",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"availability"
+							]
+						},
+						"description": "Unknown roomId.\nErrors: 404.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"roomId\": 99999,\n  \"studentId\": {{seedStudentId}},\n  \"occupied\": true\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 404\", function () { pm.response.to.have.status(404); });",
+									"pm.test(\"Error body has status 404, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(404);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "List room reports",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/rooms/{{roomId}}/availability",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"rooms",
+								"{{roomId}}",
+								"availability"
+							]
+						},
+						"description": "Reports of one room, newest first.\nInput: path room id. Output: array of Report objects. Errors: 404 unknown room."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+									"pm.test(\"Contains the report\", function () { var j = pm.response.json(); pm.expect(j).to.have.length(1); pm.expect(j[0].id).to.eql(Number(pm.collectionVariables.get(\"reportId\"))); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "List room reports - room not found (404)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/rooms/99999/availability",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"rooms",
+								"99999",
+								"availability"
+							]
+						},
+						"description": "Unknown room.\nErrors: 404."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 404\", function () { pm.response.to.have.status(404); });",
+									"pm.test(\"Error body has status 404, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(404);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Room history",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/rooms/{{roomId2}}/history",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"rooms",
+								"{{roomId2}}",
+								"history"
+							]
+						},
+						"description": "Number of reports per hour of the day.\nInput: path room id. Output: array of {hour, vacantCount, totalCount}. Errors: 404 unknown room."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+									"pm.test(\"One row for the current hour\", function () { var j = pm.response.json(); pm.expect(j).to.have.length(1); pm.expect(j[0]).to.have.all.keys(\"hour\",\"vacantCount\",\"totalCount\"); pm.expect(j[0].vacantCount).to.eql(1); pm.expect(j[0].totalCount).to.eql(1); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Delete report",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/availability/{{reportId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"availability",
+								"{{reportId}}"
+							]
+						},
+						"description": "Deletes one report.\nInput: path id. Output: empty. Errors: 404 unknown id."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 204\", function () { pm.response.to.have.status(204); });",
+									"pm.test(\"Empty body\", function () { pm.expect(pm.response.text()).to.eql(\"\"); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Delete report - already deleted (404)",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/availability/{{reportId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"availability",
+								"{{reportId}}"
+							]
+						},
+						"description": "Errors: 404."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 404\", function () { pm.response.to.have.status(404); });",
+									"pm.test(\"Error body has status 404, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(404);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Room status after delete is NO_DATA",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/rooms/{{roomId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"rooms",
+								"{{roomId}}"
+							]
+						},
+						"description": "With its only report deleted the room has no data again."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+									"pm.test(\"NO_DATA\", function () { pm.expect(pm.response.json().status).to.eql(\"NO_DATA\"); });"
+								]
+							}
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Amenities",
+			"description": "AmenityController: /amenities",
+			"item": [
+				{
+					"name": "List amenities",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/amenities",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"amenities"
+							]
+						},
+						"description": "All amenities.\nOutput: array of {id, name}."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+									"pm.test(\"Seeded amenities\", function () { var n = pm.response.json().map(function (a) { return a.name; }); pm.expect(n).to.include.members([\"Outlets\",\"Aircon\",\"Whiteboard\"]); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Create amenity",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/amenities",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"amenities"
+							]
+						},
+						"description": "Creates an amenity.\nInput: name.\nOutput: {id, name}.\nErrors: 422 blank name, 409 name already exists.\nSaves amenityId.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Projector {{run}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 201\", function () { pm.response.to.have.status(201); });",
+									"var j = pm.response.json();",
+									"pm.test(\"Name\", function () { pm.expect(j.name).to.eql(\"Projector \" + pm.collectionVariables.get(\"run\")); });",
+									"pm.collectionVariables.set(\"amenityId\", j.id);"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Create amenity - duplicate (409)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/amenities",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"amenities"
+							]
+						},
+						"description": "Same name again.\nErrors: 409.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Projector {{run}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 409\", function () { pm.response.to.have.status(409); });",
+									"pm.test(\"Error body has status 409, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(409);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Create amenity - blank name (422)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/amenities",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"amenities"
+							]
+						},
+						"description": "Blank name.\nErrors: 422.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"  \"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 422\", function () { pm.response.to.have.status(422); });",
+									"pm.test(\"Error body has status 422, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(422);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Get amenity",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/amenities/{{amenityId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"amenities",
+								"{{amenityId}}"
+							]
+						},
+						"description": "One amenity.\nErrors: 404 unknown id."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+									"pm.test(\"Right amenity\", function () { pm.expect(pm.response.json().id).to.eql(Number(pm.collectionVariables.get(\"amenityId\"))); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Get amenity - not found (404)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/amenities/99999",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"amenities",
+								"99999"
+							]
+						},
+						"description": "Errors: 404."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 404\", function () { pm.response.to.have.status(404); });",
+									"pm.test(\"Error body has status 404, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(404);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Delete amenity",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/amenities/{{amenityId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"amenities",
+								"{{amenityId}}"
+							]
+						},
+						"description": "Deletes an amenity. It is removed from every room that has it, and subscriptions that require it are deleted.\nOutput: empty. Errors: 404 unknown id."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 204\", function () { pm.response.to.have.status(204); });",
+									"pm.test(\"Empty body\", function () { pm.expect(pm.response.text()).to.eql(\"\"); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Delete amenity - already deleted (404)",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/amenities/{{amenityId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"amenities",
+								"{{amenityId}}"
+							]
+						},
+						"description": "Errors: 404."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 404\", function () { pm.response.to.have.status(404); });",
+									"pm.test(\"Error body has status 404, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(404);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});"
+								]
+							}
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Students",
+			"description": "StudentController: /students",
+			"item": [
+				{
+					"name": "List students",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/students",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"students"
+							]
+						},
+						"description": "All students.\nOutput: array of {id, name, email, phone}."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+									"pm.test(\"Array\", function () { pm.expect(pm.response.json()).to.be.an(\"array\").that.is.not.empty; });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Create student",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/students",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"students"
+							]
+						},
+						"description": "Creates a student.\nInput: name, email (valid, unique), phone (Philippine mobile: 09XXXXXXXXX or +639XXXXXXXXX).\nOutput: Student object.\nErrors: 422 invalid fields, 409 email already registered.\nSaves studentId.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Pia Reyes\",\n  \"email\": \"pia.{{run}}@example.com\",\n  \"phone\": \"+639181234567\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 201\", function () { pm.response.to.have.status(201); });",
+									"var j = pm.response.json();",
+									"pm.test(\"Student fields\", function () { pm.expect(j.email).to.eql(\"pia.\" + pm.collectionVariables.get(\"run\") + \"@example.com\"); pm.expect(j.phone).to.eql(\"+639181234567\"); });",
+									"pm.collectionVariables.set(\"studentId\", j.id);"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Create student - disposable",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/students",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"students"
+							]
+						},
+						"description": "A student that is deleted again below. Saves tempStudentId.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Temp Student\",\n  \"email\": \"temp.{{run}}@example.com\",\n  \"phone\": \"09191234567\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 201\", function () { pm.response.to.have.status(201); });",
+									"pm.collectionVariables.set(\"tempStudentId\", pm.response.json().id);"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Create student - duplicate email (409)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/students",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"students"
+							]
+						},
+						"description": "Email already registered.\nErrors: 409.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Pia Again\",\n  \"email\": \"pia.{{run}}@example.com\",\n  \"phone\": \"09191234567\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 409\", function () { pm.response.to.have.status(409); });",
+									"pm.test(\"Error body has status 409, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(409);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Create student - invalid fields (422)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/students",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"students"
+							]
+						},
+						"description": "Bad email and a phone that is not a Philippine mobile number.\nErrors: 422.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Bad\",\n  \"email\": \"not-an-email\",\n  \"phone\": \"12345\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 422\", function () { pm.response.to.have.status(422); });",
+									"pm.test(\"Error body has status 422, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(422);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});",
+									"pm.test(\"Message names the fields\", function () { var m = pm.response.json().message; pm.expect(m).to.include(\"email\"); pm.expect(m).to.include(\"phone\"); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Get student",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/students/{{studentId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"students",
+								"{{studentId}}"
+							]
+						},
+						"description": "One student.\nErrors: 404 unknown id."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+									"pm.test(\"Right student\", function () { pm.expect(pm.response.json().id).to.eql(Number(pm.collectionVariables.get(\"studentId\"))); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Get student - not found (404)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/students/99999",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"students",
+								"99999"
+							]
+						},
+						"description": "Errors: 404."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 404\", function () { pm.response.to.have.status(404); });",
+									"pm.test(\"Error body has status 404, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(404);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "List student subscriptions",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/students/{{seedStudentId}}/subscriptions",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"students",
+								"{{seedStudentId}}",
+								"subscriptions"
+							]
+						},
+						"description": "Subscriptions of one student.\nOutput: array of Subscription objects. Errors: 404 unknown student."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+									"pm.test(\"Seeded subscription\", function () { var j = pm.response.json(); pm.expect(j.length).to.be.at.least(1); pm.expect(j[0].building).to.eql(\"Faura\"); pm.expect(j[0].amenity).to.eql(\"Outlets\"); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "List student subscriptions - not found (404)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/students/99999/subscriptions",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"students",
+								"99999",
+								"subscriptions"
+							]
+						},
+						"description": "Errors: 404."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 404\", function () { pm.response.to.have.status(404); });",
+									"pm.test(\"Error body has status 404, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(404);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "List student notifications",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/students/{{studentId}}/notifications",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"students",
+								"{{studentId}}",
+								"notifications"
+							]
+						},
+						"description": "Notifications of one student, newest first.\nOutput: array of {id, studentId, message, sentAt}. Errors: 404 unknown student."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+									"pm.test(\"Empty for a new student\", function () { pm.expect(pm.response.json()).to.eql([]); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "List student notifications - not found (404)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/students/99999/notifications",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"students",
+								"99999",
+								"notifications"
+							]
+						},
+						"description": "Errors: 404."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 404\", function () { pm.response.to.have.status(404); });",
+									"pm.test(\"Error body has status 404, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(404);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Delete student",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/students/{{tempStudentId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"students",
+								"{{tempStudentId}}"
+							]
+						},
+						"description": "Deletes a student together with their reports, subscriptions and notifications.\nOutput: empty. Errors: 404 unknown id."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 204\", function () { pm.response.to.have.status(204); });",
+									"pm.test(\"Empty body\", function () { pm.expect(pm.response.text()).to.eql(\"\"); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Delete student - already deleted (404)",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/students/{{tempStudentId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"students",
+								"{{tempStudentId}}"
+							]
+						},
+						"description": "Errors: 404."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 404\", function () { pm.response.to.have.status(404); });",
+									"pm.test(\"Error body has status 404, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(404);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});"
+								]
+							}
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Subscriptions",
+			"description": "SubscriptionController: /subscriptions",
+			"item": [
+				{
+					"name": "List subscriptions",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/subscriptions",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"subscriptions"
+							]
+						},
+						"description": "All subscriptions.\nOutput: array of {id, studentId, building, minCapacity, amenity (name or null)}."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+									"pm.test(\"Array\", function () { pm.expect(pm.response.json()).to.be.an(\"array\").that.is.not.empty; });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Create subscription",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/subscriptions",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"subscriptions"
+							]
+						},
+						"description": "A subscription is a condition: tell the student when a room in this building (optionally with at least minCapacity seats and a given amenity) becomes vacant.\nInput: studentId, building, minCapacity (optional, >= 1), amenityId (optional).\nOutput: Subscription object.\nErrors: 422 missing studentId/building or minCapacity < 1, 404 unknown student or amenity.\nSaves subscriptionId.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"studentId\": {{studentId}},\n  \"building\": \"Faura\",\n  \"minCapacity\": 20,\n  \"amenityId\": {{outletsId}}\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 201\", function () { pm.response.to.have.status(201); });",
+									"var j = pm.response.json();",
+									"pm.test(\"Fields\", function () { pm.expect(j.studentId).to.eql(Number(pm.collectionVariables.get(\"studentId\"))); pm.expect(j.building).to.eql(\"Faura\"); pm.expect(j.minCapacity).to.eql(20); pm.expect(j.amenity).to.eql(\"Outlets\"); });",
+									"pm.collectionVariables.set(\"subscriptionId\", j.id);"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Create subscription - building only",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/subscriptions",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"subscriptions"
+							]
+						},
+						"description": "minCapacity and amenityId are optional; they come back as null.\nSaves subscriptionId2.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"studentId\": {{studentId}},\n  \"building\": \"CTC\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 201\", function () { pm.response.to.have.status(201); });",
+									"var j = pm.response.json();",
+									"pm.test(\"Optional fields null\", function () { pm.expect(j.minCapacity).to.eql(null); pm.expect(j.amenity).to.eql(null); });",
+									"pm.collectionVariables.set(\"subscriptionId2\", j.id);"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Create subscription - validation (422)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/subscriptions",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"subscriptions"
+							]
+						},
+						"description": "Blank building and minCapacity 0.\nErrors: 422.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"studentId\": {{studentId}},\n  \"building\": \"\",\n  \"minCapacity\": 0\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 422\", function () { pm.response.to.have.status(422); });",
+									"pm.test(\"Error body has status 422, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(422);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Create subscription - missing studentId (422)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/subscriptions",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"subscriptions"
+							]
+						},
+						"description": "Errors: 422.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"building\": \"Faura\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 422\", function () { pm.response.to.have.status(422); });",
+									"pm.test(\"Error body has status 422, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(422);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Create subscription - student not found (404)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/subscriptions",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"subscriptions"
+							]
+						},
+						"description": "Errors: 404.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"studentId\": 99999,\n  \"building\": \"Faura\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 404\", function () { pm.response.to.have.status(404); });",
+									"pm.test(\"Error body has status 404, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(404);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Create subscription - amenity not found (404)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/subscriptions",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"subscriptions"
+							]
+						},
+						"description": "Errors: 404.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"studentId\": {{studentId}},\n  \"building\": \"Faura\",\n  \"amenityId\": 99999\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 404\", function () { pm.response.to.have.status(404); });",
+									"pm.test(\"Error body has status 404, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(404);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Get subscription",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/subscriptions/{{subscriptionId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"subscriptions",
+								"{{subscriptionId}}"
+							]
+						},
+						"description": "One subscription.\nErrors: 404 unknown id."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+									"pm.test(\"Right subscription\", function () { pm.expect(pm.response.json().id).to.eql(Number(pm.collectionVariables.get(\"subscriptionId\"))); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Get subscription - not found (404)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/subscriptions/99999",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"subscriptions",
+								"99999"
+							]
+						},
+						"description": "Errors: 404."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 404\", function () { pm.response.to.have.status(404); });",
+									"pm.test(\"Error body has status 404, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(404);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "List student subscriptions (new student)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/students/{{studentId}}/subscriptions",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"students",
+								"{{studentId}}",
+								"subscriptions"
+							]
+						},
+						"description": "The two subscriptions just created (this endpoint belongs to StudentController)."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+									"pm.test(\"Two subscriptions\", function () { pm.expect(pm.response.json()).to.have.length(2); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Delete subscription",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/subscriptions/{{subscriptionId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"subscriptions",
+								"{{subscriptionId}}"
+							]
+						},
+						"description": "Deletes a subscription.\nOutput: empty. Errors: 404 unknown id."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 204\", function () { pm.response.to.have.status(204); });",
+									"pm.test(\"Empty body\", function () { pm.expect(pm.response.text()).to.eql(\"\"); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Delete subscription - building only",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/subscriptions/{{subscriptionId2}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"subscriptions",
+								"{{subscriptionId2}}"
+							]
+						},
+						"description": "Deletes the second subscription."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 204\", function () { pm.response.to.have.status(204); });",
+									"pm.test(\"Empty body\", function () { pm.expect(pm.response.text()).to.eql(\"\"); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Delete subscription - already deleted (404)",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/subscriptions/{{subscriptionId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"subscriptions",
+								"{{subscriptionId}}"
+							]
+						},
+						"description": "Errors: 404."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 404\", function () { pm.response.to.have.status(404); });",
+									"pm.test(\"Error body has status 404, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(404);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});"
+								]
+							}
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Notifications",
+			"description": "NotificationController: /notifications",
+			"item": [
+				{
+					"name": "Create notification",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/notifications",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"notifications"
+							]
+						},
+						"description": "Saves a notification for a student and sends it as an SMS to the student's phone through the mock SMS server. A failing SMS server does not fail the request.\nInput: studentId, message (not blank, max 300).\nOutput: Notification object.\nErrors: 422 invalid, 404 unknown student.\nSaves notificationId.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"studentId\": {{studentId}},\n  \"message\": \"Room F-204 is free for the next hour.\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 201\", function () { pm.response.to.have.status(201); });",
+									"var j = pm.response.json();",
+									"pm.test(\"Fields\", function () { pm.expect(j.studentId).to.eql(Number(pm.collectionVariables.get(\"studentId\"))); pm.expect(j.message).to.eql(\"Room F-204 is free for the next hour.\"); pm.expect(j.sentAt).to.be.a(\"string\"); });",
+									"pm.collectionVariables.set(\"notificationId\", j.id);"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Create notification - blank message (422)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/notifications",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"notifications"
+							]
+						},
+						"description": "Errors: 422.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"studentId\": {{studentId}},\n  \"message\": \" \"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 422\", function () { pm.response.to.have.status(422); });",
+									"pm.test(\"Error body has status 422, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(422);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Create notification - missing studentId (422)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/notifications",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"notifications"
+							]
+						},
+						"description": "Errors: 422.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"message\": \"Hello\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 422\", function () { pm.response.to.have.status(422); });",
+									"pm.test(\"Error body has status 422, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(422);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Create notification - student not found (404)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/notifications",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"notifications"
+							]
+						},
+						"description": "Errors: 404.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"studentId\": 99999,\n  \"message\": \"Hello\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 404\", function () { pm.response.to.have.status(404); });",
+									"pm.test(\"Error body has status 404, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(404);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "List notifications",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/notifications",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"notifications"
+							]
+						},
+						"description": "All notifications.\nOutput: array of {id, studentId, message, sentAt}."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+									"pm.test(\"Contains the new one\", function () { var id = Number(pm.collectionVariables.get(\"notificationId\")); pm.expect(pm.response.json().some(function (n) { return n.id === id; })).to.eql(true); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Get notification",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/notifications/{{notificationId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"notifications",
+								"{{notificationId}}"
+							]
+						},
+						"description": "One notification.\nErrors: 404 unknown id."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+									"pm.test(\"Right notification\", function () { pm.expect(pm.response.json().id).to.eql(Number(pm.collectionVariables.get(\"notificationId\"))); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Get notification - not found (404)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/notifications/99999",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"notifications",
+								"99999"
+							]
+						},
+						"description": "Errors: 404."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 404\", function () { pm.response.to.have.status(404); });",
+									"pm.test(\"Error body has status 404, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(404);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "List student notifications",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/students/{{studentId}}/notifications",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"students",
+								"{{studentId}}",
+								"notifications"
+							]
+						},
+						"description": "Notifications of the new student (this endpoint belongs to StudentController)."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+									"pm.test(\"Has the notification\", function () { var j = pm.response.json(); pm.expect(j).to.have.length(1); pm.expect(j[0].id).to.eql(Number(pm.collectionVariables.get(\"notificationId\"))); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "List seeded student notifications (subscription match)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/students/{{seedStudentId}}/notifications",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"students",
+								"{{seedStudentId}}",
+								"notifications"
+							]
+						},
+						"description": "The vacant report on the second room matched the seeded subscription, so the seeded student has a \"now vacant\" notification for it."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+									"pm.test(\"Vacancy notification exists\", function () { var name = pm.collectionVariables.get(\"roomName2\"); pm.expect(pm.response.json().some(function (n) { return n.message.indexOf(name + \" (Faura) is now vacant\") === 0; })).to.eql(true); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Delete notification",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/notifications/{{notificationId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"notifications",
+								"{{notificationId}}"
+							]
+						},
+						"description": "Deletes a notification.\nOutput: empty. Errors: 404 unknown id."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 204\", function () { pm.response.to.have.status(204); });",
+									"pm.test(\"Empty body\", function () { pm.expect(pm.response.text()).to.eql(\"\"); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Delete notification - already deleted (404)",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/notifications/{{notificationId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"notifications",
+								"{{notificationId}}"
+							]
+						},
+						"description": "Errors: 404."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 404\", function () { pm.response.to.have.status(404); });",
+									"pm.test(\"Error body has status 404, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(404);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});"
+								]
+							}
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Schedules",
+			"description": "ScheduleController: /schedules, plus GET /rooms/{id}/schedules",
+			"item": [
+				{
+					"name": "Create schedule - class in progress all day",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/schedules",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"schedules"
+							]
+						},
+						"description": "Creates a weekly class slot. A room with no report and a class in progress (not async) is predicted occupied.\nInput: roomId, dayOfWeek (MONDAY..SUNDAY), startTime and endTime (HH:mm, endTime after startTime), isAsync (optional, default false).\nOutput: Schedule object.\nErrors: 422 missing fields, 422 endTime not after startTime, 400 unreadable value such as a bad day or time, 404 unknown room, 409 overlaps another class in the same room and day.\nThis one covers the whole of today, so Map shows predictedVacant=false for the room. Saves scheduleId.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"roomId\": {{roomId}},\n  \"dayOfWeek\": \"{{today}}\",\n  \"startTime\": \"00:00\",\n  \"endTime\": \"23:59\",\n  \"isAsync\": false\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 201\", function () { pm.response.to.have.status(201); });",
+									"var j = pm.response.json();",
+									"pm.test(\"Fields\", function () { pm.expect(j.roomId).to.eql(Number(pm.collectionVariables.get(\"roomId\"))); pm.expect(j.dayOfWeek).to.eql(pm.collectionVariables.get(\"today\")); pm.expect(j.startTime).to.eql(\"00:00\"); pm.expect(j.endTime).to.eql(\"23:59\"); pm.expect(j.isAsync).to.eql(false); });",
+									"pm.collectionVariables.set(\"scheduleId\", j.id);"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Create schedule - async class",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/schedules",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"schedules"
+							]
+						},
+						"description": "An asynchronous class frees the room, so matching subscribers are notified (SMS through the mock server). Placed tomorrow so it does not overlap. Saves scheduleId2.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"roomId\": {{roomId}},\n  \"dayOfWeek\": \"{{tomorrow}}\",\n  \"startTime\": \"13:00\",\n  \"endTime\": \"14:30\",\n  \"isAsync\": true\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 201\", function () { pm.response.to.have.status(201); });",
+									"var j = pm.response.json();",
+									"pm.test(\"isAsync true\", function () { pm.expect(j.isAsync).to.eql(true); });",
+									"pm.collectionVariables.set(\"scheduleId2\", j.id);"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Create schedule - overlap (409)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/schedules",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"schedules"
+							]
+						},
+						"description": "Overlaps the all-day class.\nErrors: 409.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"roomId\": {{roomId}},\n  \"dayOfWeek\": \"{{today}}\",\n  \"startTime\": \"10:00\",\n  \"endTime\": \"11:00\",\n  \"isAsync\": false\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 409\", function () { pm.response.to.have.status(409); });",
+									"pm.test(\"Error body has status 409, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(409);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Create schedule - end before start (422)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/schedules",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"schedules"
+							]
+						},
+						"description": "endTime must be after startTime (checked by bean validation).\nErrors: 422.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"roomId\": {{roomId}},\n  \"dayOfWeek\": \"{{tomorrow}}\",\n  \"startTime\": \"15:00\",\n  \"endTime\": \"14:00\",\n  \"isAsync\": false\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 422\", function () { pm.response.to.have.status(422); });",
+									"pm.test(\"Error body has status 422, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(422);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Create schedule - missing fields (422)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/schedules",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"schedules"
+							]
+						},
+						"description": "dayOfWeek, startTime and endTime are required.\nErrors: 422.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"roomId\": {{roomId}}\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 422\", function () { pm.response.to.have.status(422); });",
+									"pm.test(\"Error body has status 422, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(422);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Create schedule - bad day (400)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/schedules",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"schedules"
+							]
+						},
+						"description": "dayOfWeek is not a day name.\nErrors: 400.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"roomId\": {{roomId}},\n  \"dayOfWeek\": \"FUNDAY\",\n  \"startTime\": \"08:00\",\n  \"endTime\": \"09:00\",\n  \"isAsync\": false\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 400\", function () { pm.response.to.have.status(400); });",
+									"pm.test(\"Error body has status 400, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(400);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Create schedule - room not found (404)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/schedules",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"schedules"
+							]
+						},
+						"description": "Errors: 404.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"roomId\": 99999,\n  \"dayOfWeek\": \"MONDAY\",\n  \"startTime\": \"08:00\",\n  \"endTime\": \"09:00\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 404\", function () { pm.response.to.have.status(404); });",
+									"pm.test(\"Error body has status 404, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(404);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "List schedules",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/schedules",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"schedules"
+							]
+						},
+						"description": "All schedules.\nInput: optional query roomId, day.\nOutput: array of {id, roomId, dayOfWeek, startTime, endTime, isAsync}.\nErrors: 400 bad day, 404 unknown roomId."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+									"pm.test(\"Array with seeded rows\", function () { pm.expect(pm.response.json().length).to.be.at.least(4); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "List schedules - by room and day",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/schedules?roomId={{seedRoomId}}&day=thursday",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"schedules"
+							],
+							"query": [
+								{
+									"key": "roomId",
+									"value": "{{seedRoomId}}"
+								},
+								{
+									"key": "day",
+									"value": "thursday"
+								}
+							]
+						},
+						"description": "Filters are optional; day is case-insensitive. Seeded F-204 has an async class on Thursday 13:00-14:30."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+									"pm.test(\"Seeded Thursday class\", function () { var j = pm.response.json(); pm.expect(j).to.have.length(1); pm.expect(j[0].dayOfWeek).to.eql(\"THURSDAY\"); pm.expect(j[0].startTime).to.eql(\"13:00\"); pm.expect(j[0].endTime).to.eql(\"14:30\"); pm.expect(j[0].isAsync).to.eql(true); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "List schedules - bad day (400)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/schedules?day=FUNDAY",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"schedules"
+							],
+							"query": [
+								{
+									"key": "day",
+									"value": "FUNDAY"
+								}
+							]
+						},
+						"description": "Errors: 400."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 400\", function () { pm.response.to.have.status(400); });",
+									"pm.test(\"Error body has status 400, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(400);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "List schedules - room not found (404)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/schedules?roomId=99999",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"schedules"
+							],
+							"query": [
+								{
+									"key": "roomId",
+									"value": "99999"
+								}
+							]
+						},
+						"description": "Errors: 404."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 404\", function () { pm.response.to.have.status(404); });",
+									"pm.test(\"Error body has status 404, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(404);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Get schedule",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/schedules/{{scheduleId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"schedules",
+								"{{scheduleId}}"
+							]
+						},
+						"description": "One schedule.\nErrors: 404 unknown id."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+									"pm.test(\"Right schedule\", function () { pm.expect(pm.response.json().id).to.eql(Number(pm.collectionVariables.get(\"scheduleId\"))); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Get schedule - not found (404)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/schedules/99999",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"schedules",
+								"99999"
+							]
+						},
+						"description": "Errors: 404."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 404\", function () { pm.response.to.have.status(404); });",
+									"pm.test(\"Error body has status 404, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(404);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "List room schedules",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/rooms/{{roomId}}/schedules",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"rooms",
+								"{{roomId}}",
+								"schedules"
+							]
+						},
+						"description": "Schedules of one room (this endpoint belongs to RoomController).\nErrors: 404 unknown room."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+									"pm.test(\"Two schedules\", function () { pm.expect(pm.response.json()).to.have.length(2); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "List room schedules - not found (404)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/rooms/99999/schedules",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"rooms",
+								"99999",
+								"schedules"
+							]
+						},
+						"description": "Errors: 404."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 404\", function () { pm.response.to.have.status(404); });",
+									"pm.test(\"Error body has status 404, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(404);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Delete schedule",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/schedules/{{scheduleId2}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"schedules",
+								"{{scheduleId2}}"
+							]
+						},
+						"description": "Deletes a schedule.\nOutput: empty. Errors: 404 unknown id."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 204\", function () { pm.response.to.have.status(204); });",
+									"pm.test(\"Empty body\", function () { pm.expect(pm.response.text()).to.eql(\"\"); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Delete schedule - already deleted (404)",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/schedules/{{scheduleId2}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"schedules",
+								"{{scheduleId2}}"
+							]
+						},
+						"description": "Errors: 404."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 404\", function () { pm.response.to.have.status(404); });",
+									"pm.test(\"Error body has status 404, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(404);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});"
+								]
+							}
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Map",
+			"description": "MapController: /map",
+			"item": [
+				{
+					"name": "Live map",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/map",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"map"
+							]
+						},
+						"description": "Every room with live status for a map view.\nInput: optional query building, floor (number), fromBuilding (sorts nearest first).\nOutput: array of {roomId, name, building, floor, mapX, mapY, status, predictedVacant, lastReportedAt, minutesAgo}.\nErrors: 400 non-numeric floor, 404 unknown building or fromBuilding."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+									"var j = pm.response.json();",
+									"function find(id) { return j.find(function (x) { return x.roomId === Number(pm.collectionVariables.get(id)); }); }",
+									"pm.test(\"Room with no data and a class in progress: NO_DATA, not predicted vacant\", function () { var m = find(\"roomId\"); pm.expect(m.status).to.eql(\"NO_DATA\"); pm.expect(m.predictedVacant).to.eql(false); });",
+									"pm.test(\"Room with a fresh vacant report: VACANT\", function () { var m = find(\"roomId2\"); pm.expect(m.status).to.eql(\"VACANT\"); pm.expect(m.predictedVacant).to.eql(false); });",
+									"pm.test(\"Seeded room without reports or classes: NO_DATA, predicted vacant\", function () { var m = j.find(function (x) { return x.name === \"CTC 102\"; }); pm.expect(m.status).to.eql(\"NO_DATA\"); pm.expect(m.predictedVacant).to.eql(true); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Live map - building and floor",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/map?building=Faura&floor=2",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"map"
+							],
+							"query": [
+								{
+									"key": "building",
+									"value": "Faura"
+								},
+								{
+									"key": "floor",
+									"value": "2"
+								}
+							]
+						},
+						"description": "Filter by building and floor. building is case-insensitive."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+									"pm.test(\"Only Faura floor 2\", function () { var j = pm.response.json(); pm.expect(j.length).to.be.at.least(4); j.forEach(function (x) { pm.expect(x.building).to.eql(\"Faura\"); pm.expect(x.floor).to.eql(2); }); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Live map - nearest first",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/map?building=Faura&fromBuilding=SEC-A",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"map"
+							],
+							"query": [
+								{
+									"key": "building",
+									"value": "Faura"
+								},
+								{
+									"key": "fromBuilding",
+									"value": "SEC-A"
+								}
+							]
+						},
+						"description": "Faura rooms sorted by distance from the SEC-A centroid (latitude/longitude). The two rooms created in this run are placed closest."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+									"pm.test(\"Created rooms come first\", function () { var j = pm.response.json(); var mine = [Number(pm.collectionVariables.get(\"roomId\")), Number(pm.collectionVariables.get(\"roomId2\"))]; pm.expect(mine).to.include(j[0].roomId); pm.expect(mine).to.include(j[1].roomId); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Live map - bad floor (400)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/map?floor=abc",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"map"
+							],
+							"query": [
+								{
+									"key": "floor",
+									"value": "abc"
+								}
+							]
+						},
+						"description": "floor must be a number.\nErrors: 400."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 400\", function () { pm.response.to.have.status(400); });",
+									"pm.test(\"Error body has status 400, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(400);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Live map - unknown building (404)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/map?building=Nowhere",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"map"
+							],
+							"query": [
+								{
+									"key": "building",
+									"value": "Nowhere"
+								}
+							]
+						},
+						"description": "Errors: 404."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 404\", function () { pm.response.to.have.status(404); });",
+									"pm.test(\"Error body has status 404, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(404);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Live map - unknown fromBuilding (404)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/map?fromBuilding=Nowhere",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"map"
+							],
+							"query": [
+								{
+									"key": "fromBuilding",
+									"value": "Nowhere"
+								}
+							]
+						},
+						"description": "Errors: 404."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 404\", function () { pm.response.to.have.status(404); });",
+									"pm.test(\"Error body has status 404, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(404);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Building summary",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/map/buildings",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"map",
+								"buildings"
+							]
+						},
+						"description": "One row per building.\nOutput: array of {building, latitude, longitude, vacantCount, totalRooms}. latitude/longitude are the average of the building's rooms that have coordinates."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+									"pm.test(\"Faura summary\", function () { var f = pm.response.json().find(function (b) { return b.building === \"Faura\"; }); pm.expect(f.totalRooms).to.be.at.least(4); pm.expect(f.vacantCount).to.be.at.least(1); pm.expect(f.latitude).to.be.within(14.6, 14.7); });"
+								]
+							}
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Cleanup",
+			"description": "Deletes what this run created.",
+			"item": [
+				{
+					"name": "Delete schedule (all-day)",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/schedules/{{scheduleId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"schedules",
+								"{{scheduleId}}"
+							]
+						},
+						"description": "Removes the all-day class."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 204\", function () { pm.response.to.have.status(204); });",
+									"pm.test(\"Empty body\", function () { pm.expect(pm.response.text()).to.eql(\"\"); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Delete student",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/students/{{studentId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"students",
+								"{{studentId}}"
+							]
+						},
+						"description": "Removes the student created in this run."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 204\", function () { pm.response.to.have.status(204); });",
+									"pm.test(\"Empty body\", function () { pm.expect(pm.response.text()).to.eql(\"\"); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Get student - deleted (404)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/students/{{studentId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"students",
+								"{{studentId}}"
+							]
+						},
+						"description": "Confirms the student is gone."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 404\", function () { pm.response.to.have.status(404); });",
+									"pm.test(\"Error body has status 404, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(404);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Delete room",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/rooms/{{roomId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"rooms",
+								"{{roomId}}"
+							]
+						},
+						"description": "Removes the first room."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 204\", function () { pm.response.to.have.status(204); });",
+									"pm.test(\"Empty body\", function () { pm.expect(pm.response.text()).to.eql(\"\"); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Delete second room (also removes its report)",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/rooms/{{roomId2}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"rooms",
+								"{{roomId2}}"
+							]
+						},
+						"description": "Removes the second room and its vacant report."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 204\", function () { pm.response.to.have.status(204); });",
+									"pm.test(\"Empty body\", function () { pm.expect(pm.response.text()).to.eql(\"\"); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Get room - deleted (404)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/rooms/{{roomId2}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"rooms",
+								"{{roomId2}}"
+							]
+						},
+						"description": "Confirms the room is gone."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 404\", function () { pm.response.to.have.status(404); });",
+									"pm.test(\"Error body has status 404, error and message\", function () {",
+									"  var j = pm.response.json();",
+									"  pm.expect(j.status).to.eql(404);",
+									"  pm.expect(j.error).to.be.a(\"string\");",
+									"  pm.expect(j.message).to.be.a(\"string\");",
+									"});"
+								]
+							}
+						}
+					]
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:9999/api"
+		},
+		{
+			"key": "run",
+			"value": ""
+		},
+		{
+			"key": "today",
+			"value": ""
+		},
+		{
+			"key": "tomorrow",
+			"value": ""
+		},
+		{
+			"key": "outletsId",
+			"value": ""
+		},
+		{
+			"key": "seedStudentId",
+			"value": ""
+		},
+		{
+			"key": "seedRoomId",
+			"value": ""
+		},
+		{
+			"key": "roomId",
+			"value": ""
+		},
+		{
+			"key": "roomName",
+			"value": ""
+		},
+		{
+			"key": "roomId2",
+			"value": ""
+		},
+		{
+			"key": "roomName2",
+			"value": ""
+		},
+		{
+			"key": "tempRoomId",
+			"value": ""
+		},
+		{
+			"key": "reportId",
+			"value": ""
+		},
+		{
+			"key": "reportId2",
+			"value": ""
+		},
+		{
+			"key": "amenityId",
+			"value": ""
+		},
+		{
+			"key": "studentId",
+			"value": ""
+		},
+		{
+			"key": "tempStudentId",
+			"value": ""
+		},
+		{
+			"key": "subscriptionId",
+			"value": ""
+		},
+		{
+			"key": "subscriptionId2",
+			"value": ""
+		},
+		{
+			"key": "notificationId",
+			"value": ""
+		},
+		{
+			"key": "scheduleId",
+			"value": ""
+		},
+		{
+			"key": "scheduleId2",
+			"value": ""
+		}
+	]
+}
