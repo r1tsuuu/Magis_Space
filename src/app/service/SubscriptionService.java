@@ -1,12 +1,11 @@
 package app.service;
 
-import java.time.LocalDateTime;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import app.entity.Room;
+import app.entity.Amenity;
 import app.entity.Student;
 import app.entity.Subscription;
 import app.repository.SubscriptionRepository;
@@ -18,28 +17,43 @@ public class SubscriptionService
 {
 	@Autowired
 	private SubscriptionRepository repo;
-	
+
 	@Autowired
 	private StudentService studentService;
-	
+
 	@Autowired
-	private RoomService roomService;
-	
-	public List<Subscription> getSubscriptions(Long studentId)
+	private AmenityService amenityService;
+
+	public List<Subscription> findAll()
 	{
-		studentService.getStudent(studentId);
-		return repo.findByStudentId(studentId);
+		return repo.findAll();
 	}
-	
-	public Subscription subscribe(SubscriptionRequest request)
+
+	public Subscription get(Long id)
 	{
-		Student student = studentService.getStudent(request.getStudentId());
-		Room room = roomService.getRoom(request.getRoomId());
-		
-		if (repo.findByStudentIdAndRoomId(student.getId(), room.getId()) != null)
-		{
-			throw new ApiException(409, "Student " + student.getId() + " is already subscribed to room " + room.getId() + ".");
-		}
-		return repo.save(new Subscription(null, student, room, LocalDateTime.now()));
+		return repo.findById(id)
+				.orElseThrow(() -> new ApiException(404, "Subscription with ID " + id + " does not exist."));
+	}
+
+	public List<Subscription> findByStudent(Long studentId)
+	{
+		return repo.findByStudent(studentService.get(studentId));
+	}
+
+	public Subscription create(SubscriptionRequest dto)
+	{
+		Student student = studentService.get(dto.getStudentId());
+		Amenity amenity = dto.getAmenityId() == null ? null : amenityService.get(dto.getAmenityId());
+		Subscription sub = new Subscription();
+		sub.setStudent(student);
+		sub.setBuilding(dto.getBuilding().trim());
+		sub.setMinCapacity(dto.getMinCapacity());
+		sub.setAmenity(amenity);
+		return repo.save(sub);
+	}
+
+	public void delete(Long id)
+	{
+		repo.delete(get(id));
 	}
 }

@@ -9,7 +9,10 @@ import javax.persistence.GenerationType;
 import javax.persistence.Id;
 import javax.persistence.JoinColumn;
 import javax.persistence.ManyToOne;
+import javax.persistence.PrePersist;
+import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
+import javax.validation.constraints.Size;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -17,47 +20,44 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 @Entity(name = "notification_table")
 public class Notification 
 {
-
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	@Column
 	private Long id;
-	
+
 	@ManyToOne
 	@JoinColumn(name = "student_id")
 	@NotNull
 	private Student student;
-	
-	@ManyToOne
-	@JoinColumn(name = "room_id")
-	@NotNull
-	private Room room;
-	
-	@Column
-	@NotNull
+
+	@Column(length = 300)
+	@NotBlank
+	@Size(max = 300)
 	private String message;
-	
+
+	// Set by the server.
 	@Column
 	@NotNull
-	private LocalDateTime createdAt;
-	
-	// "read" is a reserved word in MySQL, so the column is named is_read
-	@Column(name = "is_read")
-	@NotNull
-	private Boolean read = false;
-	
+	private LocalDateTime sentAt;
+
 	public Notification()
 	{
-		
 	}
 
-	public Notification(Long id, Student student, Room room, String message, LocalDateTime createdAt, Boolean read) {
+	public Notification(Long id, Student student, String message, LocalDateTime sentAt) {
 		this.id = id;
 		this.student = student;
-		this.room = room;
 		this.message = message;
-		this.createdAt = createdAt;
-		this.read = read;
+		this.sentAt = sentAt;
+	}
+
+	@PrePersist
+	void defaultSentAt()
+	{
+		if (sentAt == null)
+		{
+			sentAt = LocalDateTime.now();
+		}
 	}
 
 	public Long getId() {
@@ -77,25 +77,10 @@ public class Notification
 		this.student = student;
 	}
 
-	@JsonIgnore
-	public Room getRoom() {
-		return room;
-	}
-
-	public void setRoom(Room room) {
-		this.room = room;
-	}
-	
-	// Not named getStudentId()/getRoomId(): Spring Data would read findByRoomId as
-	// that getter instead of room.id and fail at startup.
+	// Not named getStudentId(): see Availability.
 	@JsonProperty("studentId")
 	public Long studentId() {
 		return student == null ? null : student.getId();
-	}
-	
-	@JsonProperty("roomId")
-	public Long roomId() {
-		return room == null ? null : room.getId();
 	}
 
 	public String getMessage() {
@@ -106,26 +91,17 @@ public class Notification
 		this.message = message;
 	}
 
-	public LocalDateTime getCreatedAt() {
-		return createdAt;
+	public LocalDateTime getSentAt() {
+		return sentAt;
 	}
 
-	public void setCreatedAt(LocalDateTime createdAt) {
-		this.createdAt = createdAt;
-	}
-
-	public Boolean getRead() {
-		return read;
-	}
-
-	public void setRead(Boolean read) {
-		this.read = read;
+	public void setSentAt(LocalDateTime sentAt) {
+		this.sentAt = sentAt;
 	}
 
 	@Override
 	public String toString() {
-		return "Notification [id=" + id + ", studentId=" + studentId() + ", roomId=" + roomId() + ", message="
-				+ message + ", createdAt=" + createdAt + ", read=" + read + "]";
+		return "Notification [id=" + id + ", studentId=" + studentId() + ", message=" + message + ", sentAt="
+				+ sentAt + "]";
 	}
-	
 }

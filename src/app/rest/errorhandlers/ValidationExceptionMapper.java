@@ -2,10 +2,16 @@ package app.rest.errorhandlers;
 
 import java.util.stream.Collectors;
 
+import javax.validation.ConstraintViolation;
 import javax.validation.ConstraintViolationException;
+import javax.validation.ElementKind;
+import javax.validation.Path.Node;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.ext.ExceptionMapper;
 import javax.ws.rs.ext.Provider;
+
+import app.validation.ValidReportInterval;
+import app.validation.ValidTimeRange;
 
 @Provider
 public class ValidationExceptionMapper implements ExceptionMapper<ConstraintViolationException>
@@ -13,12 +19,44 @@ public class ValidationExceptionMapper implements ExceptionMapper<ConstraintViol
 	@Override
 	public Response toResponse(ConstraintViolationException e)
 	{
+		// The report-interval rule is a conflict with an earlier report, not a malformed body: 409.
+		// Only when it is the sole problem; missing fields still give 422.
+		boolean onlyInterval = true;
+		for (ConstraintViolation<?> v : e.getConstraintViolations())
+		{
+			onlyInterval &= v.getConstraintDescriptor().getAnnotation() instanceof ValidReportInterval;
+		}
+		if (onlyInterval && !e.getConstraintViolations().isEmpty())
+		{
+			return ErrorBody.toResponse(409, e.getConstraintViolations().iterator().next().getMessage());
+		}
+		// A missing or null body is a bad request (400), not a field-level 422.
+		for (ConstraintViolation<?> v : e.getConstraintViolations())
+		{
+			Node last = null;
+			for (Node n : v.getPropertyPath())
+			{
+				last = n;
+			}
+			if (last != null && last.getKind() == ElementKind.PARAMETER)
+			{
+				return ErrorBody.toResponse(400, "Request body is required.");
+			}
+		}
 		String message = e.getConstraintViolations().stream()
-				.map(v -> lastPart(v.getPropertyPath().toString()) + " " + v.getMessage())
+				.map(v -> isClassLevel(v)
+						? v.getMessage()   // class-level: no property name to show
+						: lastPart(v.getPropertyPath().toString()) + " " + v.getMessage())
 				.collect(Collectors.joining("; "));
 		return ErrorBody.toResponse(422, message);
 	}
 	
+	private boolean isClassLevel(ConstraintViolation<?> v)
+	{
+		Object a = v.getConstraintDescriptor().getAnnotation();
+		return a instanceof ValidTimeRange || a instanceof ValidReportInterval;
+	}
+
 	// "createRoom.arg0.capacity" -> "capacity"
 	private String lastPart(String path)
 	{

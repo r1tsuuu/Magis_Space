@@ -12,10 +12,15 @@ import javax.persistence.Id;
 import javax.persistence.JoinColumn;
 import javax.persistence.JoinTable;
 import javax.persistence.ManyToMany;
+import javax.persistence.Table;
+import javax.persistence.UniqueConstraint;
 import javax.validation.constraints.Min;
-import javax.validation.constraints.NotNull;
+import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.Size;
 
+// Room names repeat across buildings, so only (name, building) is unique.
 @Entity(name = "room_table")
+@Table(name = "room_table", uniqueConstraints = @UniqueConstraint(columnNames = {"name", "building"}))
 public class Room 
 {
 
@@ -24,12 +29,13 @@ public class Room
 	@Column
 	private Long id;
 	
-	@Column
-	@NotNull
+	@Column(length = 50)
+	@NotBlank
+	@Size(max = 50)
 	private String name;
 	
 	@Column
-	@NotNull
+	@NotBlank
 	private String building;
 	
 	@Column
@@ -66,9 +72,8 @@ public class Room
 		
 	}
 
-	public Room(Long id, @NotNull String name, @NotNull String building, @Min(0) int floor, @Min(1) int capacity,
+	public Room(Long id, String name, String building, int floor, int capacity,
 			Double mapX, Double mapY, Double latitude, Double longitude) {
-		super();
 		this.id = id;
 		this.name = name;
 		this.building = building;

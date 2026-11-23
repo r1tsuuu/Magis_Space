@@ -5,6 +5,7 @@ import java.util.List;
 import javax.validation.Valid;
 import javax.validation.constraints.NotNull;
 import javax.ws.rs.Consumes;
+import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
@@ -24,23 +25,37 @@ import app.service.SubscriptionService;
 @Path("/subscriptions")
 public class SubscriptionController
 {
-    @Autowired
-    SubscriptionService service;
+	@Autowired
+	SubscriptionService service;
 
-    @GET
-    @Path("/{studentId}")
-    @Produces(MediaType.APPLICATION_JSON)
-    public List<Subscription> getSubscriptions(@PathParam("studentId") Long studentId)
-    {
-        return service.getSubscriptions(studentId);
-    }
+	@GET
+	@Produces(MediaType.APPLICATION_JSON)
+	public List<Subscription> getAllSubscriptions()
+	{
+		return service.findAll();
+	}
 
-    @POST
-    @Consumes(MediaType.APPLICATION_JSON)
-    @Produces(MediaType.APPLICATION_JSON)
-    public Response subscribe(@NotNull @Valid SubscriptionRequest request)
-    {
-        Subscription saved = service.subscribe(request);
-        return Response.status(Response.Status.CREATED).entity(saved).build();
-    }
+	@GET
+	@Path("/{id}")
+	@Produces(MediaType.APPLICATION_JSON)
+	public Subscription getSubscription(@PathParam("id") Long id)
+	{
+		return service.get(id);
+	}
+
+	@POST
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	public Response createSubscription(@NotNull @Valid SubscriptionRequest request)
+	{
+		return Response.status(Response.Status.CREATED).entity(service.create(request)).build();
+	}
+
+	@DELETE
+	@Path("/{id}")
+	public Response deleteSubscription(@PathParam("id") Long id)
+	{
+		service.delete(id);
+		return Response.noContent().build();
+	}
 }
