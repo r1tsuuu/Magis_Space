@@ -5,34 +5,28 @@ import javax.persistence.Entity;
 import javax.persistence.GeneratedValue;
 import javax.persistence.GenerationType;
 import javax.persistence.Id;
-import javax.validation.constraints.NotNull;
+import javax.validation.constraints.NotBlank;
 
 @Entity(name = "amenity_table")
 public class Amenity 
 {
-	
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	@Column
 	private Long id;
-	
-	
+
 	@Column(unique = true)
-	@NotNull
+	@NotBlank
 	private String name;
 
 	public Amenity()
 	{
-		
 	}
 
-	
-	public Amenity(Long id, @NotNull String name) {
-		super();
+	public Amenity(Long id, String name) {
 		this.id = id;
 		this.name = name;
 	}
-
 
 	public Long getId() {
 		return id;
@@ -50,10 +44,8 @@ public class Amenity
 		this.name = name;
 	}
 
-
 	@Override
 	public String toString() {
 		return "Amenity [id=" + id + ", name=" + name + "]";
 	}
-	
 }

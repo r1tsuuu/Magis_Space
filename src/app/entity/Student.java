@@ -7,43 +7,40 @@ import javax.persistence.GenerationType;
 import javax.persistence.Id;
 import javax.validation.constraints.Email;
 import javax.validation.constraints.NotBlank;
-import javax.validation.constraints.NotNull;
+import javax.validation.constraints.Pattern;
 import javax.validation.constraints.Size;
 
 @Entity(name="student_table")
 public class Student 
 {
+	// Philippine mobile number: 09XXXXXXXXX or +639XXXXXXXXX
+	public static final String PHONE_REGEX = "^(09|\\+639)\\d{9}$";
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	@Column
 	private Long id;
-	
-	@Column(unique = true)
-	@NotBlank
-	private String studentNumber;
-	
+
 	@Column
-	@NotNull
+	@NotBlank
 	@Size(max = 100)
 	private String name;
-	
+
 	@Column(unique = true)
-	@NotNull
+	@NotBlank
 	@Email
 	private String email;
-	
+
 	@Column
-	@NotNull
+	@NotBlank
+	@Pattern(regexp = PHONE_REGEX, message = "must be a Philippine mobile number like 09171234567 or +639171234567")
 	private String phone;
 
 	public Student(){
-		
 	}
-	
-	public Student(Long id, String studentNumber, String name, String email, String phone) {
+
+	public Student(Long id, String name, String email, String phone) {
 		this.id = id;
-		this.studentNumber = studentNumber;
 		this.name = name;
 		this.email = email;
 		this.phone = phone;
@@ -55,14 +52,6 @@ public class Student
 
 	public void setId(Long id) {
 		this.id = id;
-	}
-
-	public String getStudentNumber() {
-		return studentNumber;
-	}
-
-	public void setStudentNumber(String studentNumber) {
-		this.studentNumber = studentNumber;
 	}
 
 	public String getName() {
@@ -91,8 +80,6 @@ public class Student
 
 	@Override
 	public String toString() {
-		return "Student [id=" + id + ", studentNumber=" + studentNumber + ", name=" + name + ", email=" + email
-				+ ", phone=" + phone + "]";
+		return "Student [id=" + id + ", name=" + name + ", email=" + email + ", phone=" + phone + "]";
 	}
-	
 }

@@ -1,17 +1,24 @@
 package app.service;
 
-import java.util.HashSet;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import app.entity.Amenity;
 import app.entity.Room;
 import app.repository.AmenityRepository;
+import app.repository.AvailabilityRepository;
 import app.repository.RoomRepository;
+import app.repository.ScheduleRepository;
+import app.rest.dto.HourlyCount;
+import app.rest.dto.RoomRequest;
+import app.rest.dto.RoomView;
 import app.rest.errorhandlers.ApiException;
 
 @Service
@@ -19,55 +26,125 @@ public class RoomService
 {
 	@Autowired
 	private RoomRepository roomRepo;
-	
+
 	@Autowired
 	private AmenityRepository amenityRepo;
-	
-	public List<Room> getRooms(String building, Integer minCapacity, String amenity)
+
+	@Autowired
+	private AvailabilityRepository availabilityRepo;
+
+	@Autowired
+	private ScheduleRepository scheduleRepo;
+
+	@Autowired
+	private RoomStatusService statusService;
+
+	// minCapacity arrives as text so that "abc" and "0" can both answer 400.
+	@Transactional(readOnly = true)
+	public List<RoomView> findRooms(String building, String minCapacity, String amenity)
 	{
-		List<Room> rooms = (building == null) ? roomRepo.findAll() : roomRepo.findByBuilding(building);
-		
-		return rooms.stream()
-				.filter(r -> minCapacity == null || r.getCapacity() >= minCapacity)
-				.filter(r -> amenity == null || hasAmenity(r, amenity))
-				.collect(Collectors.toList());
+		Integer min = null;
+		if (minCapacity != null && !minCapacity.trim().isEmpty())
+		{
+			try
+			{
+				min = Integer.valueOf(minCapacity.trim());
+			}
+			catch (NumberFormatException e)
+			{
+				throw new ApiException(400, "minCapacity must be a positive number.");
+			}
+			if (min <= 0)
+			{
+				throw new ApiException(400, "minCapacity must be a positive number.");
+			}
+		}
+		return roomRepo.findByFilters(blankToNull(building), min, blankToNull(amenity)).stream()
+				.map(this::toView).collect(Collectors.toList());
 	}
-	
+
 	public Room getRoom(Long id)
 	{
 		return roomRepo.findById(id)
 				.orElseThrow(() -> new ApiException(404, "Room with ID " + id + " does not exist."));
 	}
-	
-	public Room createRoom(Room room)
+
+	@Transactional(readOnly = true)
+	public RoomView getRoomView(Long id)
 	{
-		if (roomRepo.findByName(room.getName()) != null)
+		return toView(getRoom(id));
+	}
+
+	@Transactional
+	public RoomView createRoom(RoomRequest dto)
+	{
+		if (roomRepo.existsByNameAndBuilding(dto.getName(), dto.getBuilding()))
 		{
-			throw new ApiException(409, "A room named " + room.getName() + " already exists.");
+			throw new ApiException(409, "Room " + dto.getName() + " already exists in " + dto.getBuilding() + ".");
 		}
-		
-		// Clients send amenities by name only; swap each for its persisted row.
-		Set<Amenity> resolved = new HashSet<>();
-		if (room.getAmenities() != null)
+		Set<Amenity> amenities = new LinkedHashSet<>();
+		List<Long> ids = new ArrayList<>();
+		if (dto.getAmenityId() != null)
 		{
-			for (Amenity a : room.getAmenities())
+			ids.add(dto.getAmenityId());
+		}
+		if (dto.getAmenityIds() != null)
+		{
+			ids.addAll(dto.getAmenityIds());
+		}
+		for (Long id : ids)
+		{
+			amenities.add(amenityRepo.findById(id)
+					.orElseThrow(() -> new ApiException(404, "Amenity with ID " + id + " does not exist.")));
+		}
+		if (dto.getAmenities() != null)
+		{
+			for (String name : dto.getAmenities())
 			{
-				Amenity existing = amenityRepo.findByName(a.getName());
-				if (existing == null)
+				Amenity a = amenityRepo.findByName(name);
+				if (a == null)
 				{
-					throw new ApiException(422, "Amenity " + a.getName() + " does not exist.");
+					throw new ApiException(404, "Amenity " + name + " does not exist.");
 				}
-				resolved.add(existing);
+				amenities.add(a);
 			}
 		}
-		room.setAmenities(resolved);
-		room.setId(null);
-		return roomRepo.save(room);
+		Room room = new Room(null, dto.getName(), dto.getBuilding(), dto.getFloor(), dto.getCapacity(),
+				dto.getMapX(), dto.getMapY(), dto.getLatitude(), dto.getLongitude());
+		room.setAmenities(amenities);
+		return toView(roomRepo.save(room));
 	}
-	
-	private boolean hasAmenity(Room room, String amenityName)
+
+	@Transactional
+	public void deleteRoom(Long id)
 	{
-		return room.getAmenities().stream()
-				.anyMatch(a -> a.getName().equalsIgnoreCase(amenityName));
+		Room room = getRoom(id);
+		availabilityRepo.deleteByRoom(room);
+		scheduleRepo.deleteByRoom(room);
+		roomRepo.delete(room);
+	}
+
+	@Transactional(readOnly = true)
+	public List<HourlyCount> getHourlyHistory(Long roomId)
+	{
+		getRoom(roomId);
+		return availabilityRepo.countByHour(roomId).stream().map(HourlyCount::fromRow)
+				.collect(Collectors.toList());
+	}
+
+	private RoomView toView(Room room)
+	{
+		RoomView v = RoomView.of(room);
+		RoomStatusService.Info info = statusService.compute(room);
+		v.setStatus(info.status);
+		v.setPredictedVacant(info.predictedVacant);
+		v.setLastReportedAt(info.lastReportedAt);
+		v.setMinutesAgo(info.minutesAgo);
+		return v;
+	}
+
+	private static String blankToNull(String s)
+	{
+		return s == null || s.trim().isEmpty() ? null : s.trim();
 	}
 }

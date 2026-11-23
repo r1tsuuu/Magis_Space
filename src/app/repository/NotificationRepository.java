@@ -5,12 +5,12 @@ import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import app.entity.Notification;
+import app.entity.Student;
 
 public interface NotificationRepository extends JpaRepository<Notification, Long>
 {
-	
-	List<Notification> findByStudentId(Long studentId);
-	
-	List<Notification> findByStudentIdAndReadFalse(Long studentId);
+	List<Notification> findByStudentOrderBySentAtDesc(Student student);
 
+	// derived delete: needs an active transaction (@Transactional on the calling service method)
+	void deleteByStudent(Student student);
 }
