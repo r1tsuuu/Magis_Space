@@ -16,3 +16,6 @@ Thumbs.db
 *.iml
 .vscode/
 .metadata/
+
+# Local video project (HyperFrames); the rendered film lives in docs/demo/
+demo-video/
