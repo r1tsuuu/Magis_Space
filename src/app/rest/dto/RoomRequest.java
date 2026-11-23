@@ -16,6 +16,7 @@ public class RoomRequest
 	private String name;
 
 	@NotBlank
+	@Size(max = 100)
 	private String building;
 
 	@NotNull

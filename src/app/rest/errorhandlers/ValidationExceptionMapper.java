@@ -46,7 +46,7 @@ public class ValidationExceptionMapper implements ExceptionMapper<ConstraintViol
 		String message = e.getConstraintViolations().stream()
 				.map(v -> isClassLevel(v)
 						? v.getMessage()   // class-level: no property name to show
-						: lastPart(v.getPropertyPath().toString()) + " " + v.getMessage())
+						: describe(v))
 				.collect(Collectors.joining("; "));
 		return ErrorBody.toResponse(422, message);
 	}
@@ -57,6 +57,33 @@ public class ValidationExceptionMapper implements ExceptionMapper<ConstraintViol
 		return a instanceof ValidTimeRange || a instanceof ValidReportInterval;
 	}
 
+	// A bad list element ("amenityIds[0].<list element>") is reported against the list's name.
+	private String describe(ConstraintViolation<?> v)
+	{
+		String property = null;
+		boolean element = false;
+		for (Node n : v.getPropertyPath())
+		{
+			if (n.getKind() == ElementKind.PROPERTY)
+			{
+				property = n.getName();
+				element = false;
+			}
+			else if (n.getKind() == ElementKind.CONTAINER_ELEMENT)
+			{
+				element = true;
+			}
+		}
+		if (property == null)
+		{
+			return lastPart(v.getPropertyPath().toString()) + " " + v.getMessage();
+		}
+		if (element && v.getConstraintDescriptor().getAnnotation() instanceof javax.validation.constraints.NotNull)
+		{
+			return property + " must not contain null";
+		}
+		return property + " " + v.getMessage();
+	}
 	// "createRoom.arg0.capacity" -> "capacity"
 	private String lastPart(String path)
 	{

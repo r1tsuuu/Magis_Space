@@ -2,6 +2,7 @@ package app.rest.dto;
 
 import java.time.DayOfWeek;
 import java.time.LocalTime;
+import java.util.Locale;
 
 import javax.validation.constraints.NotNull;
 
@@ -33,7 +34,23 @@ public class ScheduleRequest implements TimeRange
 	public Long getRoomId() { return roomId; }
 	public void setRoomId(Long roomId) { this.roomId = roomId; }
 	public DayOfWeek getDayOfWeek() { return dayOfWeek; }
-	public void setDayOfWeek(DayOfWeek dayOfWeek) { this.dayOfWeek = dayOfWeek; }
+	// Accepts any letter case ("monday"), like GET /schedules?day= does.
+	public void setDayOfWeek(String dayOfWeek)
+	{
+		if (dayOfWeek == null)
+		{
+			this.dayOfWeek = null;
+			return;
+		}
+		try
+		{
+			this.dayOfWeek = DayOfWeek.valueOf(dayOfWeek.trim().toUpperCase(Locale.ENGLISH));
+		}
+		catch (IllegalArgumentException e)
+		{
+			throw new IllegalArgumentException("dayOfWeek must be a day of the week such as MONDAY.");
+		}
+	}
 	@Override
 	public LocalTime getStartTime() { return startTime; }
 	public void setStartTime(LocalTime startTime) { this.startTime = startTime; }

@@ -3,6 +3,7 @@ package app.rest.dto;
 import javax.validation.constraints.Min;
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
+import javax.validation.constraints.Size;
 
 public class SubscriptionRequest
 {
@@ -10,6 +11,7 @@ public class SubscriptionRequest
 	private Long studentId;
 
 	@NotBlank
+	@Size(max = 100)
 	private String building;
 
 	@Min(1)

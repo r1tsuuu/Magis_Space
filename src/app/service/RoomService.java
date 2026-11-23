@@ -78,9 +78,11 @@ public class RoomService
 	@Transactional
 	public RoomView createRoom(RoomRequest dto)
 	{
-		if (roomRepo.existsByNameAndBuilding(dto.getName(), dto.getBuilding()))
+		String name = dto.getName().trim();
+		String building = dto.getBuilding().trim();
+		if (roomRepo.existsByNameAndBuilding(name, building))
 		{
-			throw new ApiException(409, "Room " + dto.getName() + " already exists in " + dto.getBuilding() + ".");
+			throw new ApiException(409, "Room " + name + " already exists in " + building + ".");
 		}
 		Set<Amenity> amenities = new LinkedHashSet<>();
 		List<Long> ids = new ArrayList<>();
@@ -99,17 +101,18 @@ public class RoomService
 		}
 		if (dto.getAmenities() != null)
 		{
-			for (String name : dto.getAmenities())
+			for (String amenityName : dto.getAmenities())
 			{
-				Amenity a = amenityRepo.findByName(name);
+				String trimmed = amenityName.trim();
+				Amenity a = amenityRepo.findByName(trimmed);
 				if (a == null)
 				{
-					throw new ApiException(404, "Amenity " + name + " does not exist.");
+					throw new ApiException(404, "Amenity " + trimmed + " does not exist.");
 				}
 				amenities.add(a);
 			}
 		}
-		Room room = new Room(null, dto.getName(), dto.getBuilding(), dto.getFloor(), dto.getCapacity(),
+		Room room = new Room(null, name, building, dto.getFloor(), dto.getCapacity(),
 				dto.getMapX(), dto.getMapY(), dto.getLatitude(), dto.getLongitude());
 		room.setAmenities(amenities);
 		return toView(roomRepo.save(room));
