@@ -130,6 +130,10 @@ function refreshMap() {
   $('mapTitle').textContent = state.view.building;
   return api('GET', '/map?building=' + encodeURIComponent(state.view.building)).then(function (rooms) {
     state.mapRooms = rooms; drawFloor();
+  }, function (e) {
+    // The building no longer exists (its last room was deleted): go back to the campus view.
+    if (e && e.status === 404) { state.view.building = null; state.view.floor = null; return refreshMap(); }
+    throw e;
   });
 }
 
