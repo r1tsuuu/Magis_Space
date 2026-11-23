@@ -1,22 +1,29 @@
 package app.service;
 
 import java.time.DayOfWeek;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import app.entity.ClassSchedule;
 import app.entity.Room;
 import app.repository.RoomRepository;
 import app.repository.ScheduleRepository;
+import app.rest.dto.RoomStatus;
 import app.rest.dto.ScheduleRequest;
 import app.rest.errorhandlers.ApiException;
 
 @Service
 public class ScheduleService
 {
+	private static final Logger log = LoggerFactory.getLogger(ScheduleService.class);
+	@Autowired
+	private RoomStatusService statusService;
 	@Autowired
 	private ScheduleRepository scheduleRepo;
 
@@ -26,7 +33,8 @@ public class ScheduleService
 	@Autowired
 	private NotificationService notificationService;
 
-	@Transactional
+	// Not @Transactional: the save is a single repository call, and a notification failure must never
+	// mark an enclosing transaction rollback-only (which would turn the 201 into a 500).
 	public ClassSchedule create(ScheduleRequest dto)
 	{
 		Room room = loadRoom(dto.getRoomId());
@@ -52,21 +60,30 @@ public class ScheduleService
 		boolean async = Boolean.TRUE.equals(dto.getIsAsync());
 		ClassSchedule saved = scheduleRepo.save(new ClassSchedule(null, room, dto.getDayOfWeek(),
 				dto.getStartTime(), dto.getEndTime(), async));
-		if (async)
+		// An async class frees the room only while it is in session and nobody reported the room occupied.
+		if (async && inSessionNow(saved))
 		{
-			// An async class frees the room, so tell subscribers. A notification failure must not undo the save.
 			try
 			{
-				notificationService.notifyMatchingSubscribers(room);
+				if (statusService.compute(room).status != RoomStatus.OCCUPIED)
+				{
+					notificationService.notifyMatchingSubscribers(room, null);
+				}
 			}
 			catch (RuntimeException e)
 			{
-				System.err.println("Could not notify subscribers: " + e.getMessage());
+				log.warn("Could not notify subscribers: {}", e.toString());
 			}
 		}
 		return saved;
 	}
 
+	private static boolean inSessionNow(ClassSchedule c)
+	{
+		LocalDateTime now = LocalDateTime.now();
+		LocalTime t = now.toLocalTime();
+		return c.getDayOfWeek() == now.getDayOfWeek() && !t.isBefore(c.getStartTime()) && t.isBefore(c.getEndTime());
+	}
 	public List<ClassSchedule> findByRoom(Long roomId)
 	{
 		return scheduleRepo.findByRoom(loadRoom(roomId));

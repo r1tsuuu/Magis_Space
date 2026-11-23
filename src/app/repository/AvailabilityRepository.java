@@ -34,6 +34,8 @@ public interface AvailabilityRepository extends JpaRepository<Availability, Long
 	// Not in the spec, but needed for GET /rooms/{id}/availability and for deletes:
 	List<Availability> findByRoomOrderByReportedAtDesc(Room room);
 
+	List<Availability> findAllByOrderByReportedAtDescIdDesc();
+
 	// derived deletes need an active transaction (@Transactional on the calling service method)
 	void deleteByRoom(Room room);
 

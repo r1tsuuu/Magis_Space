@@ -3,7 +3,9 @@ package app.service;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.Locale;
 
 import org.slf4j.Logger;
@@ -21,6 +23,10 @@ import app.notification.SmsResponse;
 import app.repository.NotificationRepository;
 import app.repository.SubscriptionRepository;
 import app.rest.errorhandlers.ApiException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import okhttp3.MediaType;
+import okhttp3.RequestBody;
+import okhttp3.ResponseBody;
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
@@ -32,6 +38,9 @@ import retrofit2.Response;
 public class NotificationService
 {
 	private static final Logger log = LoggerFactory.getLogger(NotificationService.class);
+	private static final int MAX_MESSAGE = 300;
+	private static final ObjectMapper MAPPER = new ObjectMapper();
+	private static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
 	private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH);
 
 	@Autowired
@@ -67,22 +76,29 @@ public class NotificationService
 		repo.delete(get(id));
 	}
 
-	// Notifies every student with a subscription matching the room. Never throws.
-	public void notifyMatchingSubscribers(Room room)
+	// Notifies every student with a subscription matching the room, at most once each, skipping
+	// excludeStudentId (the reporter). Never throws.
+	public void notifyMatchingSubscribers(Room room, Long excludeStudentId)
 	{
 		try
 		{
-			String message = room.getName() + " (" + room.getBuilding() + ") is now vacant as of "
-					+ TIME_FORMAT.format(LocalDateTime.now()) + ".";
+			String message = truncate("" + room.getName() + " (" + room.getBuilding() + ") is now vacant as of "
+					+ TIME_FORMAT.format(LocalDateTime.now()) + ".");
+			Set<Long> notified = new HashSet<>();
 			for (Subscription sub : subscriptionRepo.findMatchingForRoom(room))
 			{
+				Student student = sub.getStudent();
+				if (student == null || student.getId().equals(excludeStudentId) || !notified.add(student.getId()))
+				{
+					continue;
+				}
 				try
 				{
-					send(sub.getStudent(), message);
+					send(student, message);
 				}
 				catch (RuntimeException e)
 				{
-					log.warn("Could not notify student {}: {}", sub.studentId(), e.toString());
+					log.warn("Could not notify student {}: {}", student.getId(), e.toString());
 				}
 			}
 		}
@@ -90,6 +106,15 @@ public class NotificationService
 		{
 			log.warn("Could not notify subscribers of room {}: {}", room.getId(), e.toString());
 		}
+	}
+	// Notification.message holds at most 300 characters.
+	static String truncate(String message)
+	{
+		if (message.length() <= MAX_MESSAGE)
+		{
+			return message;
+		}
+		return message.substring(0, MAX_MESSAGE - 3) + "...";
 	}
 
 	public Notification sendAndSave(Long studentId, String message)
@@ -99,34 +124,47 @@ public class NotificationService
 
 	private Notification send(Student student, String message)
 	{
-		Notification saved = repo.save(new Notification(null, student, message, LocalDateTime.now()));
-		sendSms(student.getPhone(), message);
+		Notification saved = repo.save(new Notification(null, student, truncate(message), LocalDateTime.now()));
+		sendSms(student.getPhone(), saved.getMessage());
 		return saved;
 	}
 
+	// The JSON body is built with Jackson; the response body is only checked for success and closed.
 	private void sendSms(String phone, String message)
 	{
 		try
 		{
-			smsClient.sendSms(new SmsRequest(phone, message)).enqueue(new Callback<SmsResponse>()
+			RequestBody body = RequestBody.create(JSON, MAPPER.writeValueAsBytes(new SmsRequest(phone, message)));
+			smsClient.sendSms(body).enqueue(new Callback<ResponseBody>()
 			{
 				@Override
-				public void onResponse(Call<SmsResponse> call, Response<SmsResponse> response)
+				public void onResponse(Call<ResponseBody> call, Response<ResponseBody> response)
 				{
 					if (!response.isSuccessful())
 					{
 						log.warn("SMS to {} rejected: HTTP {}", phone, response.code());
 					}
+					else if (response.body() != null)
+					{
+						try
+						{
+							SmsResponse parsed = MAPPER.readValue(response.body().string(), SmsResponse.class);
+							log.debug("SMS to {} {}: {}", phone, parsed.getStatus(), parsed.getSid());
+						}
+						catch (IOException | RuntimeException e)
+						{
+							log.debug("SMS to {} sent; reply not readable: {}", phone, e.toString());
+						}
+					}
 				}
-
 				@Override
-				public void onFailure(Call<SmsResponse> call, Throwable t)
+				public void onFailure(Call<ResponseBody> call, Throwable t)
 				{
 					log.warn("SMS to {} failed: {}", phone, t.toString());
 				}
 			});
 		}
-		catch (RuntimeException e)
+		catch (IOException | RuntimeException e)
 		{
 			log.warn("SMS to {} could not be sent: {}", phone, e.toString());
 		}

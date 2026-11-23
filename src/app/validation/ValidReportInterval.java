@@ -30,7 +30,7 @@ import javax.validation.Payload;
 @Retention(RetentionPolicy.RUNTIME)
 public @interface ValidReportInterval
 {
-	String message() default "this student already reported this room less than 10 minutes ago";
+	String message() default ReportIntervalValidator.MESSAGE;
 
 	Class<?>[] groups() default {};
 
