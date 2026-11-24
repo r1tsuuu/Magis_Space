@@ -60,8 +60,9 @@ public class RoomStatusService
 		else
 		{
 			reportedAt = latest.getReportedAt();
-			minutes = Math.max(0, Duration.between(reportedAt, now).toMinutes());
-			if (minutes > EXPIRY_MINUTES)
+			long seconds = Math.max(0, Duration.between(reportedAt, now).getSeconds());
+			minutes = seconds / 60;
+			if (!latest.isVerified() || seconds >= EXPIRY_MINUTES * 60L)
 			{
 				status = RoomStatus.UNVERIFIED;
 			}

@@ -15,6 +15,7 @@ public class StudentRequest
 
 	@NotBlank
 	@Email
+	@Size(max = 100)
 	private String email;
 
 	@NotBlank

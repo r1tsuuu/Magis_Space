@@ -6,12 +6,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import okhttp3.OkHttpClient;
 import retrofit2.Retrofit;
-import retrofit2.converter.jackson.JacksonConverterFactory;
 
 // Builds the SmsClient from notification.api.url. The bean ALWAYS exists (never null): when the url is
 // empty or invalid it falls back to http://localhost:8080/, so calls simply fail with an IOException
@@ -32,23 +29,21 @@ public class SmsClientConfig
 				.readTimeout(3, TimeUnit.SECONDS)
 				.writeTimeout(3, TimeUnit.SECONDS)
 				.build();
-		ObjectMapper mapper = new ObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 		try
 		{
-			return build(baseUrl(apiUrl), http, mapper);
+			return build(baseUrl(apiUrl), http);
 		}
 		catch (IllegalArgumentException e)
 		{
-			return build(FALLBACK_URL, http, mapper);
+			return build(FALLBACK_URL, http);
 		}
 	}
 
-	private SmsClient build(String url, OkHttpClient http, ObjectMapper mapper)
+	private SmsClient build(String url, OkHttpClient http)
 	{
 		return new Retrofit.Builder()
 				.baseUrl(url)
 				.client(http)
-				.addConverterFactory(JacksonConverterFactory.create(mapper))
 				.build()
 				.create(SmsClient.class);
 	}

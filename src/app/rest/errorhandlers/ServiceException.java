@@ -1,5 +1,7 @@
 package app.rest.errorhandlers;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 
 import javax.ws.rs.core.Response;
@@ -14,6 +16,7 @@ public class ServiceException extends Exception implements
                 ExceptionMapper<Throwable> 
 {
     private static final long serialVersionUID = 1L;
+    private static final Logger log = LoggerFactory.getLogger(ServiceException.class);
  
     public ServiceException() {
         super("Something bad has happened");
@@ -35,7 +38,7 @@ public class ServiceException extends Exception implements
     		}
     	}
     	// Never send a stack trace to the client; always answer with the JSON ErrorBody.
-    	exception.printStackTrace();
+    	log.error("Unexpected server error", exception);
     	return ErrorBody.toResponse(500, "Unexpected server error.");
     }
 }

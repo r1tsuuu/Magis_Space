@@ -13,7 +13,7 @@ This is the finals project for CSCI 181.05.
 
 ## Prerequisites
 - Eclipse with the class `SpringBootDependencies` project in the same workspace. `.classpath` references it for the Spring, Jersey, Jackson, Hibernate, and MySQL jars.
-- These jars must also be in `SpringBootDependencies` (Jackson, Jersey and Spring are already there): `retrofit` 2.9.0, `converter-jackson` 2.9.0, `okhttp` 3.14.x, and `okio`.
+- No extra jars are needed beyond `SpringBootDependencies` (Spring Boot 2.1, Jersey 2.26, Jackson 2.9.7, `retrofit` 2.4.0, `okhttp` 3.10.0, `okio` 1.14.0, MySQL connector 8.0.13). The SMS client uses OkHttp request and response bodies and Jackson, so no Retrofit converter jar is required.
 - XAMPP with MySQL running on port 3306, user `root`, no password.
 - Optional: Node.js, to run the Postman collection from the command line with newman.
 
@@ -53,6 +53,7 @@ Settings are in `config/application.properties`.
 | `spring.datasource.url` | `jdbc:mysql://localhost:3306/magis_space_db?...` | Change if your MySQL runs elsewhere |
 | `spring.datasource.username` / `password` | `root` / empty | XAMPP defaults |
 | `spring.jpa.hibernate.ddl-auto` | `update` | Creates and updates tables |
+| `spring.jpa.show-sql` | `false` | Set to `true` to print every SQL statement |
 | `notification.api.url` | `http://localhost:8080/` | Base URL of the mock SMS service. If empty or invalid, `http://localhost:8080/` is used. |
 
 ## Endpoints
@@ -60,13 +61,15 @@ Base URL: `http://localhost:9999/api`. Requests and responses are JSON.
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/rooms?building=&minCapacity=&amenity=` | List rooms with live status. All filters are optional. |
+| GET | `/rooms?building=&minCapacity=&amenity=` | List rooms with live status, sorted by building, then name. All filters are optional. |
 | GET | `/rooms/{id}` | One room |
 | POST | `/rooms` | Create a room |
 | DELETE | `/rooms/{id}` | Delete a room with its reports and schedules |
 | GET | `/rooms/{id}/history` | Reports per hour of the day: `{hour, vacantCount, totalCount}` |
 | GET | `/rooms/{id}/availability` | Reports of a room, newest first |
 | GET | `/rooms/{id}/schedules` | Class schedules of a room |
+| GET | `/availability?roomId=` | List reports, newest first. `roomId` is optional. |
+| GET | `/availability/{id}` | One report |
 | POST | `/availability` | Report a room as occupied or vacant |
 | DELETE | `/availability/{id}` | Delete a report |
 | GET | `/amenities` | List amenities |
@@ -94,17 +97,17 @@ Base URL: `http://localhost:9999/api`. Requests and responses are JSON.
 | GET | `/map?building=&floor=&fromBuilding=` | Every room with live status for a map. `fromBuilding` sorts nearest first. |
 | GET | `/map/buildings` | One row per building with its vacant and total room counts |
 
-Request bodies:
+Request bodies. Room name and building, amenity name, student email and subscription building are trimmed before the duplicate check and saving.
 
 | Endpoint | Fields |
 |---|---|
-| `POST /rooms` | `name` (max 50), `building`, `floor` (0 or more), `capacity` (1 or more). Optional: `mapX`, `mapY`, `latitude`, `longitude`, and amenities as `amenityId` (one id), `amenityIds` (list of ids) or `amenities` (list of names). |
+| `POST /rooms` | `name` (max 50), `building` (max 100), `floor` (0 or more), `capacity` (1 or more). Optional: `mapX`, `mapY`, `latitude`, `longitude`, and amenities as `amenityId` (one id), `amenityIds` (list of ids) or `amenities` (list of names). |
 | `POST /availability` | `roomId`, `studentId`, `occupied` (true or false) |
-| `POST /amenities` | `name` |
-| `POST /students` | `name`, `email`, `phone` (`09XXXXXXXXX` or `+639XXXXXXXXX`) |
-| `POST /subscriptions` | `studentId`, `building`. Optional: `minCapacity` (1 or more), `amenityId`. |
+| `POST /amenities` | `name` (max 50) |
+| `POST /students` | `name` (max 100), `email` (max 100), `phone` (`09XXXXXXXXX` or `+639XXXXXXXXX`) |
+| `POST /subscriptions` | `studentId`, `building` (max 100). Optional: `minCapacity` (1 or more), `amenityId`. |
 | `POST /notifications` | `studentId`, `message` (not blank, max 300) |
-| `POST /schedules` | `roomId`, `dayOfWeek` (`MONDAY` to `SUNDAY`), `startTime`, `endTime` (`HH:mm`, end after start). Optional: `isAsync` (default false). |
+| `POST /schedules` | `roomId`, `dayOfWeek` (`MONDAY` to `SUNDAY`, any letter case), `startTime`, `endTime` (`HH:mm`, end after start). Optional: `isAsync` (default false). |
 
 ## Usage
 These are real responses from the running app.
@@ -152,11 +155,16 @@ Response (`201 Created`):
 [ { "hour": 14, "vacantCount": 1, "totalCount": 1 } ]
 ```
 
-A vacant report notifies students whose subscription matches the room. The seeded subscription watches Faura rooms with Outlets, so after a vacant report on a Faura room with Outlets, `GET /api/students/1/notifications` returns (and the mock SMS server prints) something like:
+The seeded subscription watches Faura rooms with Outlets. When another student reports Faura room F-204 as vacant, `GET /api/students/1/notifications` returns (and the mock SMS server prints):
 ```json
-[ { "id": 1, "message": "PM-B 1795415175267 (Faura) is now vacant as of 2:26 PM.", "sentAt": "2026-11-23T14:26:15.823", "studentId": 1 } ]
+[ { "id": 1, "message": "F-204 (Faura) is now vacant as of 3:52 PM.", "sentAt": "2026-11-23T15:52:18", "studentId": 1 } ]
 ```
-Creating a class schedule with `"isAsync": true` also notifies matching subscribers, because an async class does not use the room.
+### Notification rules
+- A vacant report notifies matching subscribers only when it is a change to vacant: the room's status just before the report was not `VACANT` (`OCCUPIED`, `UNVERIFIED` and `NO_DATA` all count as a change). A second vacant report on a room that is already `VACANT` notifies nobody. Occupied reports never notify.
+- The student who filed the report is not notified about it.
+- A student gets at most one notification per event, even when several of their subscriptions match.
+- Creating an async class schedule (`"isAsync": true`) notifies matching subscribers only when that class is in session right now (today's day of the week, `startTime <= now < endTime`) and the room's current status is not `OCCUPIED`. An async class on another day or time notifies nobody.
+- Messages are cut to 300 characters at most. A failed notification or SMS never fails the report or schedule request.
 
 Create a subscription (a condition, not a room):
 ```
@@ -198,9 +206,9 @@ Each room and each map entry carries these fields, worked out from the room's la
 
 | Status | Meaning |
 |---|---|
-| `VACANT` | The latest report is 60 minutes old or less and says vacant |
-| `OCCUPIED` | The latest report is 60 minutes old or less and says occupied |
-| `UNVERIFIED` | The latest report is older than 60 minutes |
+| `VACANT` | The latest report is verified, under 60 minutes old and says vacant |
+| `OCCUPIED` | The latest report is verified, under 60 minutes old and says occupied |
+| `UNVERIFIED` | The latest report is unverified (`verified` is false) or is 60 minutes old or more (exact age in seconds) |
 | `NO_DATA` | The room has no reports |
 
 `predictedVacant` is only computed for `UNVERIFIED` and `NO_DATA` rooms. It is `true` when no class is in progress in the room right now (server day and time), or every class in progress is async. For `VACANT` and `OCCUPIED` rooms it is always `false`. `lastReportedAt` and `minutesAgo` are `null` when the room has no reports.
@@ -216,12 +224,12 @@ Errors come back as JSON:
 ```
 | Status | When |
 |---|---|
-| 400 | `minCapacity` is not a positive number. `floor` on `/map` is not a number. `day` is not a day name. The body is not valid JSON, or a value cannot be read (`"floor": "x"`, `"dayOfWeek": "FUNDAY"`, `"startTime": "8am"`). A POST has no body. |
-| 404 | Student, room, amenity, report, subscription, notification or schedule not found. A building given to `/map` does not exist. An unknown URL. |
+| 400 | A path or query parameter cannot be converted, for example `GET /rooms/abc`, `GET /schedules?roomId=abc` or an id too large for a number. The message names the parameter. `minCapacity` is not a positive number. `floor` on `/map` is not a number. `day` is not a day name. The body is not valid JSON, or a value cannot be read (`"floor": "x"`, `"dayOfWeek": "FUNDAY"`, `"startTime": "8am"`). A POST has no body. |
+| 404 | Student, room, amenity, report, subscription, notification or schedule not found. A building given to `/map` does not exist. An unknown URL (a malformed id is a 400, not a 404). |
 | 405 | A method the path does not support |
-| 409 | A room with the same name already exists in that building. Amenity name or student email already exists. The same student reported the same room less than 10 minutes ago. A class schedule overlaps another class in the same room and day. A database unique constraint is violated. |
-| 422 | A field fails validation: blank name, capacity below 1, invalid email or phone, missing required fields, `minCapacity` below 1, blank message, `endTime` not after `startTime`. The message lists the fields. |
-| 500 | Anything unexpected. The body is `"Unexpected server error."`; details are printed in the server console. |
+| 409 | A room with the same name already exists in that building. Amenity name or student email already exists. The same student reported the same room less than 10 minutes ago ("You already reported this room less than 10 minutes ago."). A class schedule overlaps another class in the same room and day. A database unique constraint is violated. |
+| 422 | A field fails validation: blank name, a text longer than its limit (the limits are listed under request bodies), a null inside `amenityIds` or `amenities` ("amenityIds must not contain null"), capacity below 1, invalid email or phone, missing required fields, `minCapacity` below 1, blank message, `endTime` not after `startTime`. The message lists the fields. |
+| 500 | Anything unexpected. The body is `"Unexpected server error."`; the stack trace is written to the server log. |
 
 ## Postman collection
 `postman/MagisSpace.postman_collection.json` (Postman collection v2.1) has a request for every endpoint, error examples (for example "Create Room - duplicate (409)"), a description on each request, and test scripts that check the status code and key fields.
@@ -231,13 +239,13 @@ To use it:
 2. The collection variable `baseUrl` is `http://localhost:9999/api`. Change it if the app runs elsewhere.
 3. Start the app with the seeded data and the mock SMS server, then run the collection with the Collection Runner (Run collection), top to bottom.
 
-Folders: Setup (looks up seeded ids), Rooms, Availability, Amenities, Students, Subscriptions, Notifications, Schedules, Map, and Cleanup. Requests are ordered so the whole run passes on a freshly seeded database. Created ids are stored in collection variables and reused, names and emails carry a per-run suffix, and everything the run creates is deleted again. Only the seeded student and room F-204 are read, never changed. The class schedule request uses the current day of the week of the machine running Postman, so Postman and the app should be on the same machine or time zone.
+Folders: Setup (looks up seeded ids and creates a reporter student), Rooms, Availability, Amenities, Students, Subscriptions, Notifications, Schedules, Notification rules, Map, and Cleanup. Requests are ordered so the whole run passes on a freshly seeded database. Created ids are stored in collection variables and reused, names and emails carry a per-run suffix, and everything the run creates is deleted again. Only the seeded student and room F-204 are read, never changed. The class schedule request uses the current day of the week of the machine running Postman, so Postman and the app should be on the same machine or time zone.
 
 From the command line:
 ```
 npx newman run postman/MagisSpace.postman_collection.json
 ```
-Add `--env-var baseUrl=http://localhost:PORT/api` to use another port. The last verified run, on a fresh database with the mock SMS server running, executed 107 requests with 217 assertions and 0 failures.
+Add `--env-var baseUrl=http://localhost:PORT/api` to use another port. The last verified run, on a fresh database with the mock SMS server running, executed 144 requests with 293 assertions and 0 failures, and a second run against the same database gave the same result.
 
 ## Project layout
 ```
@@ -264,5 +272,5 @@ src/app/components/              seed data (DataLoader) and the report expiry sc
 - There is no login or authorization. Anyone can create or delete any record, and a report is trusted as sent.
 - There are no update (PUT) endpoints. To change a record, delete and create it again.
 - Rooms, schedules and the day/time used for `predictedVacant` use the server's local time zone.
-- `GET /rooms` has no guaranteed order.
 - An `endTime` that is not after `startTime` is rejected with 422 by validation before the service's own 400 check is reached.
+- A class cannot end at midnight: `endTime` must be after `startTime` on the same day, so use `23:59` as the latest end.

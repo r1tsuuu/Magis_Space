@@ -13,6 +13,7 @@ import app.rest.dto.AvailabilityRequest;
 public class ReportIntervalValidator implements ConstraintValidator<ValidReportInterval, AvailabilityRequest>
 {
 	public static final int MIN_MINUTES = 10;
+	public static final String MESSAGE = "You already reported this room less than " + MIN_MINUTES + " minutes ago.";
 
 	// Set once at startup by ReportIntervalConfig. Null means "not wired yet": the check is skipped.
 	private static volatile AvailabilityRepository repository;

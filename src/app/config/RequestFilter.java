@@ -8,6 +8,8 @@ import javax.servlet.ServletResponse;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
@@ -18,6 +20,7 @@ import org.springframework.stereotype.Component;
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class RequestFilter implements Filter {
+    private static final Logger log = LoggerFactory.getLogger(RequestFilter.class);
 
     public void doFilter(ServletRequest req, ServletResponse res, FilterChain chain) {
 
@@ -34,10 +37,10 @@ public class RequestFilter implements Filter {
             try {
                 chain.doFilter(req, res);
             } catch (Exception ex) {
-                ex.printStackTrace();
+                log.error("Unhandled error while serving {} {}", request.getMethod(), request.getRequestURI(), ex);
             }
         } else {
-            System.out.println("Pre-flight");
+            log.debug("Pre-flight");
             response.setHeader("Access-Control-Allowed-Methods", "POST, GET, DELETE");
             response.setHeader("Access-Control-Max-Age", "3600");
             response.setHeader("Access-Control-Allow-Headers", "authorization, content-type,x-auth-token, " +
