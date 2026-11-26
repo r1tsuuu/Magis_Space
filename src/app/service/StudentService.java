@@ -54,7 +54,6 @@ public class StudentService
 		return repo.save(student);
 	}
 
-	// Deletes the student's reports, subscriptions and notifications first, then the student.
 	@Transactional
 	public void delete(Long id)
 	{

@@ -21,10 +21,6 @@ import app.repository.ScheduleRepository;
 import app.repository.StudentRepository;
 import app.repository.SubscriptionRepository;
 
-// Seeds a starting state for demos. The app does not depend on it: everything can be created through the API.
-// Each table is only seeded while it is empty, so restarting never duplicates rows.
-// Latitude/longitude values are approximate points on the Ateneo Loyola Heights campus, not surveyed.
-// mapX/mapY are arbitrary demo positions: there is no campus map image or pixel scale to place rooms on.
 @Component
 public class DataLoader
 {

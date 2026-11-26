@@ -7,7 +7,6 @@ import org.springframework.stereotype.Component;
 
 import app.repository.AvailabilityRepository;
 
-// Gives the (non-Spring) ReportIntervalValidator access to the repository.
 @Component
 public class ReportIntervalConfig
 {

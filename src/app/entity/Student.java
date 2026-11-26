@@ -13,7 +13,6 @@ import javax.validation.constraints.Size;
 @Entity(name="student_table")
 public class Student 
 {
-	// Philippine mobile number: 09XXXXXXXXX or +639XXXXXXXXX
 	public static final String PHONE_REGEX = "^(09|\\+639)\\d{9}$";
 
 	@Id

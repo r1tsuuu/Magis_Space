@@ -11,7 +11,6 @@ import org.springframework.stereotype.Component;
 import app.entity.Availability;
 import app.repository.AvailabilityRepository;
 
-// Reports older than 60 minutes are marked unverified (not deleted), so room history is kept.
 @Component
 public class ReportExpiryScheduler
 {
@@ -22,7 +21,6 @@ public class ReportExpiryScheduler
 	public void expireOldReports()
 	{
 		LocalDateTime cutoff = LocalDateTime.now().minusMinutes(60);
-		// findByReportedAtBefore also returns reports that are already unverified; only save the others.
 		List<Availability> expired = repo.findByReportedAtBefore(cutoff).stream()
 				.filter(Availability::isVerified)
 				.collect(Collectors.toList());

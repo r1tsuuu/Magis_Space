@@ -9,7 +9,6 @@ import javax.ws.rs.ext.ExceptionMapper;
 import javax.ws.rs.ext.Provider;
 
 
-// Catch-all: any unhandled exception becomes a JSON ErrorBody (500, or 409 for constraint violations).
 
 @Provider
 public class ServiceException extends Exception implements
@@ -29,7 +28,6 @@ public class ServiceException extends Exception implements
     @Override
     public Response toResponse(Throwable exception) 
     {
-    	// Unique-constraint races (duplicate room/email/amenity) are conflicts, not server errors.
     	for (Throwable t = exception; t != null; t = t.getCause())
     	{
     		if (t instanceof DataIntegrityViolationException)
@@ -37,7 +35,6 @@ public class ServiceException extends Exception implements
     			return ErrorBody.toResponse(409, "The request conflicts with existing data.");
     		}
     	}
-    	// Never send a stack trace to the client; always answer with the JSON ErrorBody.
     	log.error("Unexpected server error", exception);
     	return ErrorBody.toResponse(500, "Unexpected server error.");
     }

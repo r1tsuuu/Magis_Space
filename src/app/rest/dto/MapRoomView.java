@@ -4,7 +4,6 @@ import java.time.LocalDateTime;
 
 import app.entity.Room;
 
-// One room on the live map (GET /map). Same status fields as RoomView.
 public class MapRoomView
 {
 	private Long roomId;
@@ -22,7 +21,6 @@ public class MapRoomView
 	{
 	}
 
-	// Copies the room's own fields; status fields keep their defaults for the caller to set.
 	public static MapRoomView of(Room room)
 	{
 		MapRoomView v = new MapRoomView();

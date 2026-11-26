@@ -10,9 +10,6 @@ import org.springframework.context.annotation.Configuration;
 import okhttp3.OkHttpClient;
 import retrofit2.Retrofit;
 
-// Builds the SmsClient from notification.api.url. The bean ALWAYS exists (never null): when the url is
-// empty or invalid it falls back to http://localhost:8080/, so calls simply fail with an IOException
-// that the caller catches.
 @Configuration
 public class SmsClientConfig
 {
@@ -48,7 +45,6 @@ public class SmsClientConfig
 				.create(SmsClient.class);
 	}
 
-	// Retrofit requires the base url to end with "/".
 	static String baseUrl(String url)
 	{
 		String u = url == null ? "" : url.trim();

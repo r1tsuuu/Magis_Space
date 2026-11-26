@@ -1,6 +1,5 @@
 package app.rest.dto;
 
-// GET /rooms/{id}/history element: reports in one hour of the day.
 public class HourlyCount
 {
 	private int hour;
@@ -18,7 +17,6 @@ public class HourlyCount
 		this.totalCount = totalCount;
 	}
 
-	// Converts one row of AvailabilityRepository.countByHour().
 	public static HourlyCount fromRow(Object[] row)
 	{
 		return new HourlyCount(((Number) row[0]).intValue(),

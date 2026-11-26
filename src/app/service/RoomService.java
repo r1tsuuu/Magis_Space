@@ -39,7 +39,6 @@ public class RoomService
 	@Autowired
 	private RoomStatusService statusService;
 
-	// minCapacity arrives as text so that "abc" and "0" can both answer 400.
 	@Transactional(readOnly = true)
 	public List<RoomView> findRooms(String building, String minCapacity, String amenity)
 	{

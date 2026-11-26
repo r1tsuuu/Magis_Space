@@ -89,7 +89,6 @@ public class RoomController
 		return reportService.getReportsForRoom(id);
 	}
 
-	// Owned by the schedule feature; lives here because Jersey needs one class per @Path("/rooms").
 	@GET
 	@Path("/{id}/schedules")
 	@Produces(MediaType.APPLICATION_JSON)

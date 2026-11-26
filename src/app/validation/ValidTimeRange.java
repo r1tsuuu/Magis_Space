@@ -9,10 +9,6 @@ import java.lang.annotation.Target;
 import javax.validation.Constraint;
 import javax.validation.Payload;
 
-/**
- * Class-level constraint: endTime must be after startTime. Null times pass (use @NotNull on the fields).
- * Applied to ClassSchedule and ScheduleRequest. A violation yields 422 through ValidationExceptionMapper.
- */
 @Documented
 @Constraint(validatedBy = TimeRangeValidator.class)
 @Target({ ElementType.TYPE })

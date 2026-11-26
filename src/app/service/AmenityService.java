@@ -49,8 +49,6 @@ public class AmenityService
 		return repo.save(amenity);
 	}
 
-	// The amenity is removed from every room that has it. Subscriptions that require it are DELETED
-	// (nulling the amenity would silently widen them to match any room in the building).
 	@Transactional
 	public void delete(Long id)
 	{
