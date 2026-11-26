@@ -223,14 +223,16 @@ function layoutPins(canvas, pins) {
     svg.setAttribute('class', 'links'); svg.setAttribute('width', W); svg.setAttribute('height', H);
     pins.forEach(function (p) {
       var ex = p.cx, ey = p.cy + p.h / 2, d = Math.sqrt((ex - p.tx) * (ex - p.tx) + (ey - p.ty) * (ey - p.ty));
-      if (d > 50) {
-        var l = document.createElementNS(NS, 'line');
-        l.setAttribute('x1', p.tx); l.setAttribute('y1', p.ty); l.setAttribute('x2', ex); l.setAttribute('y2', ey);
-        svg.appendChild(l);
+      if (d > 12) {
+        if (d > 50) {
+          var l = document.createElementNS(NS, 'line');
+          l.setAttribute('x1', p.tx); l.setAttribute('y1', p.ty); l.setAttribute('x2', ex); l.setAttribute('y2', ey);
+          svg.appendChild(l);
+        }
+        var dot = document.createElementNS(NS, 'circle');
+        dot.setAttribute('cx', p.tx); dot.setAttribute('cy', p.ty); dot.setAttribute('r', 3.5);
+        svg.appendChild(dot);
       }
-      var dot = document.createElementNS(NS, 'circle');
-      dot.setAttribute('cx', p.tx); dot.setAttribute('cy', p.ty); dot.setAttribute('r', 3.5);
-      svg.appendChild(dot);
     });
     canvas.insertBefore(svg, canvas.firstChild);
   }
