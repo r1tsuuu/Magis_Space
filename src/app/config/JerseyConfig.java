@@ -8,7 +8,6 @@ public class JerseyConfig extends ResourceConfig {
 
     public JerseyConfig() {
         
-		// Jersey does not use Spring's component scan, so it needs the package explicitly.
 		packages("app.rest");  
 				    
 

@@ -15,29 +15,13 @@ import java.util.Random;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/**
- * Tiny mock Twilio for demos. Only needs the JDK (Java 8), no other jars.
- *
- * In Eclipse: right-click this file > Run As > Java Application (default port 8080).
- * To use another port: Run > Run Configurations > Arguments > Program arguments: 8081
- * (then set notification.api.url in config/application.properties to match).
- * In a terminal, from the project folder:
- *   javac -d out src/mock/MockSmsServer.java && java -cp out mock.MockSmsServer [port]
- *
- * POST /sms/send {"to":"...","body":"..."} -> 200 {"sid":"SM...","status":"queued"}; prints each message.
- *
- * It uses only java.net.ServerSocket. It does not use com.sun.net.httpserver, because Eclipse with a
- * Java 8 JRE marks that package as restricted API and refuses to compile it ("Access restriction").
- *
- * This class is in package "mock", outside "app", so Spring Boot's component scan never picks it up.
- */
 public class MockSmsServer
 {
 	private static final Random RANDOM = new Random();
 	private static final int MAX_BODY = 64 * 1024;
 	private static int count = 0;
 
-	@SuppressWarnings("resource") // the server socket stays open until the program is stopped
+	@SuppressWarnings("resource")
 	public static void main(String[] args)
 	{
 		int port = 8080;
@@ -91,7 +75,6 @@ public class MockSmsServer
 		}
 	}
 
-	// Handles one request on one connection, then closes it.
 	private static void serve(Socket socket)
 	{
 		try (Socket s = socket)
@@ -169,11 +152,9 @@ public class MockSmsServer
 		}
 		catch (IOException | RuntimeException e)
 		{
-			// A broken connection only affects that one SMS; the app logs the failure and carries on.
 		}
 	}
 
-	// Minimal extraction of a string field from a flat JSON object (handles \" and \\ escapes).
 	private static String field(String json, String name)
 	{
 		Matcher m = Pattern.compile("\"" + name + "\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"").matcher(json);
@@ -184,7 +165,6 @@ public class MockSmsServer
 		return m.group(1).replace("\\\"", "\"").replace("\\n", "\n").replace("\\\\", "\\");
 	}
 
-	// Reads one header line (ending in \r\n or \n), without the line ending. Returns null at end of stream.
 	private static String readLine(InputStream in) throws IOException
 	{
 		ByteArrayOutputStream buf = new ByteArrayOutputStream();

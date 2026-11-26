@@ -14,8 +14,6 @@ import javax.validation.constraints.NotNull;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-// A subscription is a condition ("a room in this building, with at least this capacity and this amenity
-// became vacant"), not a specific room. minCapacity and amenity are optional.
 @Entity(name = "subscription_table")
 public class Subscription 
 {
@@ -70,8 +68,6 @@ public class Subscription
 		this.student = student;
 	}
 
-	// Not named getStudentId(): Spring Data would read findByStudentId as
-	// that getter instead of student.id and fail at startup.
 	@JsonProperty("studentId")
 	public Long studentId() {
 		return student == null ? null : student.getId();
@@ -102,7 +98,6 @@ public class Subscription
 		this.amenity = amenity;
 	}
 
-	// JSON shows the amenity as its name (or null).
 	@JsonProperty("amenity")
 	public String amenityName() {
 		return amenity == null ? null : amenity.getName();

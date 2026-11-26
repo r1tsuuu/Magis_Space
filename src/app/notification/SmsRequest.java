@@ -1,6 +1,5 @@
 package app.notification;
 
-// Body of POST sms/send on the mock Twilio: {"to": "...", "body": "..."}
 public class SmsRequest
 {
 	private String to;

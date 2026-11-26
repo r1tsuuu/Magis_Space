@@ -33,8 +33,6 @@ public class ScheduleService
 	@Autowired
 	private NotificationService notificationService;
 
-	// Not @Transactional: the save is a single repository call, and a notification failure must never
-	// mark an enclosing transaction rollback-only (which would turn the 201 into a 500).
 	public ClassSchedule create(ScheduleRequest dto)
 	{
 		Room room = loadRoom(dto.getRoomId());
@@ -46,7 +44,6 @@ public class ScheduleService
 		{
 			throw new ApiException(400, "endTime must be after startTime.");
 		}
-		// Two slots overlap when each starts before the other ends; back-to-back slots do not overlap.
 		for (ClassSchedule existing : scheduleRepo.findByRoomIdAndDayOfWeek(room.getId(), dto.getDayOfWeek()))
 		{
 			if (existing.getStartTime().isBefore(dto.getEndTime())
@@ -60,7 +57,6 @@ public class ScheduleService
 		boolean async = Boolean.TRUE.equals(dto.getIsAsync());
 		ClassSchedule saved = scheduleRepo.save(new ClassSchedule(null, room, dto.getDayOfWeek(),
 				dto.getStartTime(), dto.getEndTime(), async));
-		// An async class frees the room only while it is in session and nobody reported the room occupied.
 		if (async && inSessionNow(saved))
 		{
 			try

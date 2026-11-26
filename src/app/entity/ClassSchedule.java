@@ -21,7 +21,6 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import app.validation.TimeRange;
 import app.validation.ValidTimeRange;
 
-// A weekly class slot. A room with a class in progress is predicted occupied unless the class is asynchronous.
 @Entity(name = "class_schedule_table")
 @ValidTimeRange
 public class ClassSchedule implements TimeRange
@@ -49,7 +48,6 @@ public class ClassSchedule implements TimeRange
 	@NotNull
 	private LocalTime endTime;
 
-	// Java property "async"; the JSON name is "isAsync" (see the @JsonProperty on both accessors).
 	@Column(name = "is_async")
 	private boolean async = false;
 
@@ -84,8 +82,6 @@ public class ClassSchedule implements TimeRange
 		this.room = room;
 	}
 
-	// Not named getRoomId(): Spring Data would read findByRoomId as
-	// that getter instead of room.id and fail at startup.
 	@JsonProperty("roomId")
 	public Long roomId() {
 		return room == null ? null : room.getId();

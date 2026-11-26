@@ -11,8 +11,6 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import app.validation.TimeRange;
 import app.validation.ValidTimeRange;
 
-// JSON: {"roomId":1,"dayOfWeek":"THURSDAY","startTime":"13:00","endTime":"14:30","isAsync":true}
-// isAsync is optional and defaults to false.
 @ValidTimeRange
 public class ScheduleRequest implements TimeRange
 {
@@ -34,7 +32,6 @@ public class ScheduleRequest implements TimeRange
 	public Long getRoomId() { return roomId; }
 	public void setRoomId(Long roomId) { this.roomId = roomId; }
 	public DayOfWeek getDayOfWeek() { return dayOfWeek; }
-	// Accepts any letter case ("monday"), like GET /schedules?day= does.
 	public void setDayOfWeek(String dayOfWeek)
 	{
 		if (dayOfWeek == null)

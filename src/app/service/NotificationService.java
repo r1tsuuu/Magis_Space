@@ -31,9 +31,6 @@ import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
 
-// SMS delivery is asynchronous (Retrofit enqueue): the request thread only saves the Notification and
-// hands the SMS to OkHttp's dispatcher, so a slow or dead SMS server never delays or fails a request.
-// Failures (unreachable, timeout, non-2xx) are only logged. The Notification row is saved regardless.
 @Service
 public class NotificationService
 {
@@ -76,8 +73,6 @@ public class NotificationService
 		repo.delete(get(id));
 	}
 
-	// Notifies every student with a subscription matching the room, at most once each, skipping
-	// excludeStudentId (the reporter). Never throws.
 	public void notifyMatchingSubscribers(Room room, Long excludeStudentId)
 	{
 		try
@@ -107,7 +102,6 @@ public class NotificationService
 			log.warn("Could not notify subscribers of room {}: {}", room.getId(), e.toString());
 		}
 	}
-	// Notification.message holds at most 300 characters.
 	static String truncate(String message)
 	{
 		if (message.length() <= MAX_MESSAGE)
@@ -129,7 +123,6 @@ public class NotificationService
 		return saved;
 	}
 
-	// The JSON body is built with Jackson; the response body is only checked for success and closed.
 	private void sendSms(String phone, String message)
 	{
 		try

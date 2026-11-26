@@ -14,7 +14,6 @@ import app.repository.AvailabilityRepository;
 import app.repository.ScheduleRepository;
 import app.rest.dto.RoomStatus;
 
-// Works out the live status of a room from its latest report and the class schedule.
 @Service
 public class RoomStatusService
 {

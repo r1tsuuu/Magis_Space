@@ -26,7 +26,6 @@ public class MapService
 	@Autowired
 	private RoomStatusService statusService;
 
-	// floor arrives as text so that a non-numeric value can answer 400.
 	@Transactional(readOnly = true)
 	public List<MapRoomView> getMap(String building, String floor, String fromBuilding)
 	{
@@ -129,7 +128,6 @@ public class MapService
 		return result;
 	}
 
-	// Average of the rooms that have the coordinates (lat/long when geo, else mapX/mapY); null if none do.
 	private double[] centroid(List<Room> rooms, boolean geo)
 	{
 		double a = 0;
@@ -149,7 +147,6 @@ public class MapService
 		return n == 0 ? null : new double[] { a / n, b / n };
 	}
 
-	// Rooms without the needed coordinates sort last.
 	private double distance(Room r, double[] origin, boolean geo)
 	{
 		Double x = geo ? r.getLatitude() : r.getMapX();

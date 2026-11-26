@@ -26,7 +26,7 @@ public class ErrorBody
 
 	private static String reasonPhrase(int status)
 	{
-		if (status == 422) return "Unprocessable Entity";   // JAX-RS's Status enum has no 422
+		if (status == 422) return "Unprocessable Entity";
 		Response.Status s = Response.Status.fromStatusCode(status);
 		return s == null ? "Error" : s.getReasonPhrase();
 	}

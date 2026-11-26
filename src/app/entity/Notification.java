@@ -35,7 +35,6 @@ public class Notification
 	@Size(max = 300)
 	private String message;
 
-	// Set by the server.
 	@Column
 	@NotNull
 	private LocalDateTime sentAt;
@@ -77,7 +76,6 @@ public class Notification
 		this.student = student;
 	}
 
-	// Not named getStudentId(): see Availability.
 	@JsonProperty("studentId")
 	public Long studentId() {
 		return student == null ? null : student.getId();

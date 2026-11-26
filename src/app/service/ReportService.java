@@ -46,7 +46,6 @@ public class ReportService
 		{
 			throw new ApiException(409, ReportIntervalValidator.MESSAGE);
 		}
-		// Status before this report decides whether it is a change to vacant.
 		boolean wasVacant = statusService.compute(room).status == RoomStatus.VACANT;
 		Availability report = new Availability(null, student, room, dto.getOccupied(), LocalDateTime.now(), true);
 		Availability saved = availabilityRepo.save(report);
@@ -58,7 +57,6 @@ public class ReportService
 			}
 			catch (RuntimeException e)
 			{
-				// a failed notification must never fail the report
 				log.warn("Notification failed: {}", e.toString());
 			}
 		}

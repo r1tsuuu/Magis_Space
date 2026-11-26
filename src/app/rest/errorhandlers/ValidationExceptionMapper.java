@@ -19,8 +19,6 @@ public class ValidationExceptionMapper implements ExceptionMapper<ConstraintViol
 	@Override
 	public Response toResponse(ConstraintViolationException e)
 	{
-		// The report-interval rule is a conflict with an earlier report, not a malformed body: 409.
-		// Only when it is the sole problem; missing fields still give 422.
 		boolean onlyInterval = true;
 		for (ConstraintViolation<?> v : e.getConstraintViolations())
 		{
@@ -30,7 +28,6 @@ public class ValidationExceptionMapper implements ExceptionMapper<ConstraintViol
 		{
 			return ErrorBody.toResponse(409, e.getConstraintViolations().iterator().next().getMessage());
 		}
-		// A missing or null body is a bad request (400), not a field-level 422.
 		for (ConstraintViolation<?> v : e.getConstraintViolations())
 		{
 			Node last = null;
@@ -45,7 +42,7 @@ public class ValidationExceptionMapper implements ExceptionMapper<ConstraintViol
 		}
 		String message = e.getConstraintViolations().stream()
 				.map(v -> isClassLevel(v)
-						? v.getMessage()   // class-level: no property name to show
+						? v.getMessage()
 						: describe(v))
 				.collect(Collectors.joining("; "));
 		return ErrorBody.toResponse(422, message);
@@ -57,7 +54,6 @@ public class ValidationExceptionMapper implements ExceptionMapper<ConstraintViol
 		return a instanceof ValidTimeRange || a instanceof ValidReportInterval;
 	}
 
-	// A bad list element ("amenityIds[0].<list element>") is reported against the list's name.
 	private String describe(ConstraintViolation<?> v)
 	{
 		String property = null;
@@ -84,7 +80,6 @@ public class ValidationExceptionMapper implements ExceptionMapper<ConstraintViol
 		}
 		return property + " " + v.getMessage();
 	}
-	// "createRoom.arg0.capacity" -> "capacity"
 	private String lastPart(String path)
 	{
 		int dot = path.lastIndexOf('.');

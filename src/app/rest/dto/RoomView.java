@@ -9,7 +9,6 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import app.entity.Amenity;
 import app.entity.Room;
 
-// Response JSON of a room; amenities are names. lastReportedAt/minutesAgo are null when the room has no reports.
 @JsonInclude(JsonInclude.Include.ALWAYS)
 public class RoomView
 {
@@ -32,7 +31,6 @@ public class RoomView
 	{
 	}
 
-	// Copies the room's own fields (amenity names sorted). Status fields keep their defaults for the caller to set.
 	public static RoomView of(Room room)
 	{
 		RoomView v = new RoomView();

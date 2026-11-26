@@ -11,6 +11,5 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
 {
 	List<Notification> findByStudentOrderBySentAtDesc(Student student);
 
-	// derived delete: needs an active transaction (@Transactional on the calling service method)
 	void deleteByStudent(Student student);
 }

@@ -7,8 +7,6 @@ import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
 import javax.validation.constraints.Size;
 
-// Amenities can be given as amenityId (one), amenityIds (several) or amenities (names). All are optional;
-// the service combines whichever are present and answers 404 for an unknown id or name.
 public class RoomRequest
 {
 	@NotBlank

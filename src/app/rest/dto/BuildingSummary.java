@@ -1,6 +1,5 @@
 package app.rest.dto;
 
-// GET /map/buildings. latitude/longitude are the average of the building's rooms that have coordinates (else null).
 public class BuildingSummary
 {
 	private String building;

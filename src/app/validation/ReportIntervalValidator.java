@@ -15,7 +15,6 @@ public class ReportIntervalValidator implements ConstraintValidator<ValidReportI
 	public static final int MIN_MINUTES = 10;
 	public static final String MESSAGE = "You already reported this room less than " + MIN_MINUTES + " minutes ago.";
 
-	// Set once at startup by ReportIntervalConfig. Null means "not wired yet": the check is skipped.
 	private static volatile AvailabilityRepository repository;
 
 	static void setRepository(AvailabilityRepository repo)
@@ -33,7 +32,6 @@ public class ReportIntervalValidator implements ConstraintValidator<ValidReportI
 		return isIntervalOk(repository, request.getStudentId(), request.getRoomId());
 	}
 
-	/** True when the student has no report for the room, or the latest one is at least 10 minutes old. */
 	public static boolean isIntervalOk(AvailabilityRepository repo, Long studentId, Long roomId)
 	{
 		if (repo == null || studentId == null || roomId == null)

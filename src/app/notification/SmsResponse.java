@@ -2,7 +2,6 @@ package app.notification;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
-// Mock Twilio reply: {"sid": "...", "status": "..."}. Other fields are ignored.
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class SmsResponse
 {

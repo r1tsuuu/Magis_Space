@@ -18,7 +18,6 @@ import javax.validation.constraints.Min;
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.Size;
 
-// Room names repeat across buildings, so only (name, building) is unique.
 @Entity(name = "room_table")
 @Table(name = "room_table", uniqueConstraints = @UniqueConstraint(columnNames = {"name", "building"}))
 public class Room 
@@ -58,7 +57,6 @@ public class Room
 	@Column
 	private Double longitude;
 	
-	// EAGER: Jersey serializes after the JPA session closes, so LAZY would throw.
 	@ManyToMany(fetch = FetchType.EAGER)
 	@JoinTable(
 		name = "room_amenity_table",

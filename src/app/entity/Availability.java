@@ -15,8 +15,6 @@ import javax.validation.constraints.NotNull;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-// One student report about one room. The 10-minute rule (@ValidReportInterval) lives on AvailabilityRequest,
-// not here: a repository lookup during JPA persist/flush would run in the middle of the save.
 @Entity(name = "availability_table")
 public class Availability 
 {
@@ -38,12 +36,10 @@ public class Availability
 	@Column
 	private boolean occupied;
 
-	// Set by the server, never by the client.
 	@Column
 	@NotNull
 	private LocalDateTime reportedAt;
 
-	// False once the report is older than 60 minutes (see ReportExpiryScheduler).
 	@Column
 	private boolean verified = true;
 
@@ -96,8 +92,6 @@ public class Availability
 		this.room = room;
 	}
 
-	// Not named getStudentId()/getRoomId(): Spring Data would read findByRoomId as
-	// that getter instead of room.id and fail at startup.
 	@JsonProperty("studentId")
 	public Long studentId() {
 		return student == null ? null : student.getId();

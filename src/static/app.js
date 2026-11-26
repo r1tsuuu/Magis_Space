@@ -51,7 +51,6 @@ function fmtTime(s) {
 }
 function likelyFree(r) { return r.predictedVacant && (r.status === 'NO_DATA' || r.status === 'UNVERIFIED'); }
 
-/* ---------- student ---------- */
 function loadStudents() {
   return api('GET', '/students').then(function (list) {
     state.students = list;
@@ -90,7 +89,6 @@ $('studentForm').addEventListener('submit', function (ev) {
     }).catch(fail);
 });
 
-/* ---------- campus + floor map ---------- */
 function loadBuildings() {
   return api('GET', '/map/buildings').then(function (b) {
     state.buildings = b;
@@ -131,7 +129,6 @@ function refreshMap() {
   return api('GET', '/map?building=' + encodeURIComponent(state.view.building)).then(function (rooms) {
     state.mapRooms = rooms; drawFloor();
   }, function (e) {
-    // The building no longer exists (its last room was deleted): go back to the campus view.
     if (e && e.status === 404) { state.view.building = null; state.view.floor = null; return refreshMap(); }
     throw e;
   });
@@ -167,8 +164,6 @@ function drawCampus() {
   var n = el('div', 'north', 'N'); canvas.appendChild(n);
   map.appendChild(el('div', 'mapnote', 'Schematic map: buildings keep their north-south and east-west order. Pins are nudged apart when close together.'));
 }
-// Projects buildings from latitude/longitude into the canvas (one scale for both axes), then pushes
-// overlapping pins to the nearest free spot. If they still cannot fit (many buildings, narrow screen) it falls back to a tidy grid.
 function layoutPins(canvas, pins) {
   var W = canvas.clientWidth || 600;
   var H = W < 640 ? 440 : Math.max(400, Math.min(560, Math.round(W * 0.46)));
@@ -179,9 +174,7 @@ function layoutPins(canvas, pins) {
   var minLa = Math.min.apply(null, las), maxLa = Math.max.apply(null, las), minLo = Math.min.apply(null, los), maxLo = Math.max.apply(null, los);
   var maxW = Math.max.apply(null, pins.map(function (p) { return p.w; })), maxH = Math.max.apply(null, pins.map(function (p) { return p.h; }));
   var padX = maxW / 2 + EDGE, padT = maxH + EDGE, padB = EDGE + 6;
-  // Positions keep the north-south and east-west order of the real coordinates, stretched to fill the canvas.
   var availW = W - 2 * padX, availH = H - padT - padB;
-  // Half real distance, half rank order, so one far-away building does not squeeze all the others together.
   function frac(vals, v, min, max) {
     var u = vals.filter(function (x, i) { return vals.indexOf(x) === i; }).sort(function (a, b) { return a - b; });
     var lin = max > min ? (v - min) / (max - min) : 0.5, rank = u.length > 1 ? u.indexOf(v) / (u.length - 1) : 0.5;
@@ -192,7 +185,6 @@ function layoutPins(canvas, pins) {
     p.ty = padT + (1 - frac(las, p.b.latitude, minLa, maxLa)) * availH;
     p.cx0 = p.tx; p.cy0 = p.ty - p.h / 2;
   });
-  // Place pins one by one (north first) at the nearest free spot to their real position.
   var offsets = [];
   for (var ddx = -W; ddx <= W; ddx += 8) for (var ddy = -H; ddy <= H; ddy += 8) offsets.push([ddx, ddy, ddx * ddx + ddy * ddy]);
   offsets.sort(function (m, n) { return m[2] - n[2]; });
@@ -276,7 +268,6 @@ function drawFloor() {
   if (!rooms.length) { map.appendChild(el('div', 'skeleton', 'No rooms in this building yet.')); return; }
   rooms.forEach(function (r) { map.appendChild(roomBox(r)); });
 }
-/* ---------- room list ---------- */
 function loadList() {
   var q = [];
   if ($('fBuilding').value) q.push('building=' + encodeURIComponent($('fBuilding').value));
@@ -329,7 +320,6 @@ $('fCap').addEventListener('input', debounce(function () { loadList().catch(fail
 $('filters').addEventListener('submit', function (e) { e.preventDefault(); });
 function debounce(f, ms) { var t; return function () { clearTimeout(t); t = setTimeout(f, ms); }; }
 
-/* ---------- report ---------- */
 function report(roomId, occupied, holder) {
   if (!state.studentId) {
     toast('Choose who you are first (top right) or create a new student.', true);
@@ -343,11 +333,9 @@ function report(roomId, occupied, holder) {
       return refreshAll(true);
     }).catch(fail)
     .then(function () { Array.prototype.forEach.call(btns, function (b) { b.disabled = false; }); });
-  // notifications are saved asynchronously on the server; look again shortly
   setTimeout(function () { loadNotifications(true).catch(function () {}); }, 2500);
 }
 
-/* ---------- subscriptions + notifications ---------- */
 function loadPersonal(quiet) { return Promise.all([loadSubs(), loadNotifications(quiet)]); }
 function loadSubs() {
   var box = $('subList'); clear(box);
@@ -422,7 +410,6 @@ $('bellBtn').addEventListener('click', function () {
   }
 });
 
-/* ---------- refresh ---------- */
 function stamp() {
   state.lastOk = new Date();
   $('updatedText').textContent = 'Updated ' + state.lastOk.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' }) + ' · auto-refresh 30 s';

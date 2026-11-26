@@ -10,8 +10,6 @@ import app.entity.Room;
 
 public interface RoomRepository extends JpaRepository<Room, Long>
 {
-	// All three filters are optional (pass null to skip). Building and amenity match ignoring case.
-	// minCapacity means capacity >= minCapacity. Sorted by building, then name.
 	@Query("select distinct r from room_table r left join r.amenities a "
 			+ "where (:building is null or lower(r.building) = lower(:building)) "
 			+ "and (:minCapacity is null or r.capacity >= :minCapacity) "
@@ -24,11 +22,9 @@ public interface RoomRepository extends JpaRepository<Room, Long>
 
 	List<Room> findByBuildingAndFloor(String building, int floor);
 
-	// Not in the spec, but needed by the map/amenity code:
 	List<Room> findByBuilding(String building);
 
 	boolean existsByBuilding(String building);
 
-	// rooms that have the given amenity (used before deleting an amenity)
 	List<Room> findByAmenities_Id(Long amenityId);
 }

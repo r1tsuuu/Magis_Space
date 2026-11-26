@@ -4,7 +4,6 @@ import javax.validation.constraints.NotNull;
 
 import app.validation.ValidReportInterval;
 
-// @ValidReportInterval makes this fail with 409 when the same student reported the same room under 10 minutes ago.
 @ValidReportInterval
 public class AvailabilityRequest
 {
