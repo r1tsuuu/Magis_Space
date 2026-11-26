@@ -5,7 +5,7 @@ import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import app.entity.Amenity;
+import app.entity.Room;
 import app.entity.Student;
 import app.entity.Subscription;
 import app.repository.SubscriptionRepository;
@@ -22,10 +22,14 @@ public class SubscriptionService
 	private StudentService studentService;
 
 	@Autowired
-	private AmenityService amenityService;
+	private RoomService roomService;
 
-	public List<Subscription> findAll()
+	public List<Subscription> findAll(Long studentId)
 	{
+		if (studentId != null)
+		{
+			return repo.findByStudent(studentService.get(studentId));
+		}
 		return repo.findAll();
 	}
 
@@ -35,21 +39,16 @@ public class SubscriptionService
 				.orElseThrow(() -> new ApiException(404, "Subscription with ID " + id + " does not exist."));
 	}
 
-	public List<Subscription> findByStudent(Long studentId)
-	{
-		return repo.findByStudent(studentService.get(studentId));
-	}
-
 	public Subscription create(SubscriptionRequest dto)
 	{
 		Student student = studentService.get(dto.getStudentId());
-		Amenity amenity = dto.getAmenityId() == null ? null : amenityService.get(dto.getAmenityId());
-		Subscription sub = new Subscription();
-		sub.setStudent(student);
-		sub.setBuilding(dto.getBuilding().trim());
-		sub.setMinCapacity(dto.getMinCapacity());
-		sub.setAmenity(amenity);
-		return repo.save(sub);
+		Room room = roomService.getRoom(dto.getRoomId());
+		if (repo.existsByStudentAndRoom(student, room))
+		{
+			throw new ApiException(409, "Student " + student.getId() + " is already subscribed to room "
+					+ room.getId() + ".");
+		}
+		return repo.save(new Subscription(null, student, room));
 	}
 
 	public void delete(Long id)

@@ -9,7 +9,9 @@ import app.entity.Student;
 
 public interface NotificationRepository extends JpaRepository<Notification, Long>
 {
-	List<Notification> findByStudentOrderBySentAtDesc(Student student);
+	List<Notification> findByStudentOrderBySentAtDescIdDesc(Student student);
+
+	List<Notification> findAllByOrderBySentAtDescIdDesc();
 
 	void deleteByStudent(Student student);
 }

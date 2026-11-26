@@ -18,14 +18,9 @@ import javax.ws.rs.core.Response;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import app.entity.Availability;
-import app.entity.ClassSchedule;
-import app.rest.dto.HourlyCount;
+import app.entity.Room;
 import app.rest.dto.RoomRequest;
-import app.rest.dto.RoomView;
-import app.service.ReportService;
 import app.service.RoomService;
-import app.service.ScheduleService;
 
 @Component
 @Path("/rooms")
@@ -34,26 +29,19 @@ public class RoomController
 	@Autowired
 	RoomService service;
 
-	@Autowired
-	ReportService reportService;
-
-	@Autowired
-	ScheduleService scheduleService;
-
 	@GET
 	@Produces(MediaType.APPLICATION_JSON)
-	public List<RoomView> getRooms(@QueryParam("building") String building,
-			@QueryParam("minCapacity") String minCapacity, @QueryParam("amenity") String amenity)
+	public List<Room> getRooms(@QueryParam("building") String building)
 	{
-		return service.findRooms(building, minCapacity, amenity);
+		return service.findRooms(building);
 	}
 
 	@GET
 	@Path("/{id}")
 	@Produces(MediaType.APPLICATION_JSON)
-	public RoomView getRoom(@PathParam("id") Long id)
+	public Room getRoom(@PathParam("id") Long id)
 	{
-		return service.getRoomView(id);
+		return service.getRoom(id);
 	}
 
 	@POST
@@ -61,7 +49,7 @@ public class RoomController
 	@Produces(MediaType.APPLICATION_JSON)
 	public Response createRoom(@NotNull @Valid RoomRequest request)
 	{
-		RoomView saved = service.createRoom(request);
+		Room saved = service.createRoom(request);
 		return Response.status(Response.Status.CREATED).entity(saved).build();
 	}
 
@@ -71,29 +59,5 @@ public class RoomController
 	{
 		service.deleteRoom(id);
 		return Response.noContent().build();
-	}
-
-	@GET
-	@Path("/{id}/history")
-	@Produces(MediaType.APPLICATION_JSON)
-	public List<HourlyCount> getHistory(@PathParam("id") Long id)
-	{
-		return service.getHourlyHistory(id);
-	}
-
-	@GET
-	@Path("/{id}/availability")
-	@Produces(MediaType.APPLICATION_JSON)
-	public List<Availability> getAvailability(@PathParam("id") Long id)
-	{
-		return reportService.getReportsForRoom(id);
-	}
-
-	@GET
-	@Path("/{id}/schedules")
-	@Produces(MediaType.APPLICATION_JSON)
-	public List<ClassSchedule> getSchedules(@PathParam("id") Long id)
-	{
-		return scheduleService.findByRoom(id);
 	}
 }

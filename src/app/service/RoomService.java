@@ -1,12 +1,11 @@
 package app.service;
 
-import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,10 +14,8 @@ import app.entity.Room;
 import app.repository.AmenityRepository;
 import app.repository.AvailabilityRepository;
 import app.repository.RoomRepository;
-import app.repository.ScheduleRepository;
-import app.rest.dto.HourlyCount;
+import app.repository.SubscriptionRepository;
 import app.rest.dto.RoomRequest;
-import app.rest.dto.RoomView;
 import app.rest.errorhandlers.ApiException;
 
 @Service
@@ -34,32 +31,15 @@ public class RoomService
 	private AvailabilityRepository availabilityRepo;
 
 	@Autowired
-	private ScheduleRepository scheduleRepo;
+	private SubscriptionRepository subscriptionRepo;
 
-	@Autowired
-	private RoomStatusService statusService;
-
-	@Transactional(readOnly = true)
-	public List<RoomView> findRooms(String building, String minCapacity, String amenity)
+	public List<Room> findRooms(String building)
 	{
-		Integer min = null;
-		if (minCapacity != null && !minCapacity.trim().isEmpty())
+		if (building == null || building.trim().isEmpty())
 		{
-			try
-			{
-				min = Integer.valueOf(minCapacity.trim());
-			}
-			catch (NumberFormatException e)
-			{
-				throw new ApiException(400, "minCapacity must be a positive number.");
-			}
-			if (min <= 0)
-			{
-				throw new ApiException(400, "minCapacity must be a positive number.");
-			}
+			return roomRepo.findAll(Sort.by("building", "name"));
 		}
-		return roomRepo.findByFilters(blankToNull(building), min, blankToNull(amenity)).stream()
-				.map(this::toView).collect(Collectors.toList());
+		return roomRepo.findByBuildingIgnoreCaseOrderByName(building.trim());
 	}
 
 	public Room getRoom(Long id)
@@ -68,14 +48,8 @@ public class RoomService
 				.orElseThrow(() -> new ApiException(404, "Room with ID " + id + " does not exist."));
 	}
 
-	@Transactional(readOnly = true)
-	public RoomView getRoomView(Long id)
-	{
-		return toView(getRoom(id));
-	}
-
 	@Transactional
-	public RoomView createRoom(RoomRequest dto)
+	public Room createRoom(RoomRequest dto)
 	{
 		String name = dto.getName().trim();
 		String building = dto.getBuilding().trim();
@@ -84,37 +58,17 @@ public class RoomService
 			throw new ApiException(409, "Room " + name + " already exists in " + building + ".");
 		}
 		Set<Amenity> amenities = new LinkedHashSet<>();
-		List<Long> ids = new ArrayList<>();
-		if (dto.getAmenityId() != null)
-		{
-			ids.add(dto.getAmenityId());
-		}
 		if (dto.getAmenityIds() != null)
 		{
-			ids.addAll(dto.getAmenityIds());
-		}
-		for (Long id : ids)
-		{
-			amenities.add(amenityRepo.findById(id)
-					.orElseThrow(() -> new ApiException(404, "Amenity with ID " + id + " does not exist.")));
-		}
-		if (dto.getAmenities() != null)
-		{
-			for (String amenityName : dto.getAmenities())
+			for (Long id : dto.getAmenityIds())
 			{
-				String trimmed = amenityName.trim();
-				Amenity a = amenityRepo.findByName(trimmed);
-				if (a == null)
-				{
-					throw new ApiException(404, "Amenity " + trimmed + " does not exist.");
-				}
-				amenities.add(a);
+				amenities.add(amenityRepo.findById(id)
+						.orElseThrow(() -> new ApiException(404, "Amenity with ID " + id + " does not exist.")));
 			}
 		}
-		Room room = new Room(null, name, building, dto.getFloor(), dto.getCapacity(),
-				dto.getMapX(), dto.getMapY(), dto.getLatitude(), dto.getLongitude());
+		Room room = new Room(null, name, building, dto.getFloor(), dto.getCapacity());
 		room.setAmenities(amenities);
-		return toView(roomRepo.save(room));
+		return roomRepo.save(room);
 	}
 
 	@Transactional
@@ -122,31 +76,7 @@ public class RoomService
 	{
 		Room room = getRoom(id);
 		availabilityRepo.deleteByRoom(room);
-		scheduleRepo.deleteByRoom(room);
+		subscriptionRepo.deleteByRoom(room);
 		roomRepo.delete(room);
-	}
-
-	@Transactional(readOnly = true)
-	public List<HourlyCount> getHourlyHistory(Long roomId)
-	{
-		getRoom(roomId);
-		return availabilityRepo.countByHour(roomId).stream().map(HourlyCount::fromRow)
-				.collect(Collectors.toList());
-	}
-
-	private RoomView toView(Room room)
-	{
-		RoomView v = RoomView.of(room);
-		RoomStatusService.Info info = statusService.compute(room);
-		v.setStatus(info.status);
-		v.setPredictedVacant(info.predictedVacant);
-		v.setLastReportedAt(info.lastReportedAt);
-		v.setMinutesAgo(info.minutesAgo);
-		return v;
-	}
-
-	private static String blankToNull(String s)
-	{
-		return s == null || s.trim().isEmpty() ? null : s.trim();
 	}
 }

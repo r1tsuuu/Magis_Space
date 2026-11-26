@@ -10,24 +10,12 @@ import javax.ws.rs.core.Response;
 import javax.ws.rs.ext.ExceptionMapper;
 import javax.ws.rs.ext.Provider;
 
-import app.validation.ValidReportInterval;
-import app.validation.ValidTimeRange;
-
 @Provider
 public class ValidationExceptionMapper implements ExceptionMapper<ConstraintViolationException>
 {
 	@Override
 	public Response toResponse(ConstraintViolationException e)
 	{
-		boolean onlyInterval = true;
-		for (ConstraintViolation<?> v : e.getConstraintViolations())
-		{
-			onlyInterval &= v.getConstraintDescriptor().getAnnotation() instanceof ValidReportInterval;
-		}
-		if (onlyInterval && !e.getConstraintViolations().isEmpty())
-		{
-			return ErrorBody.toResponse(409, e.getConstraintViolations().iterator().next().getMessage());
-		}
 		for (ConstraintViolation<?> v : e.getConstraintViolations())
 		{
 			Node last = null;
@@ -41,19 +29,11 @@ public class ValidationExceptionMapper implements ExceptionMapper<ConstraintViol
 			}
 		}
 		String message = e.getConstraintViolations().stream()
-				.map(v -> isClassLevel(v)
-						? v.getMessage()
-						: describe(v))
+				.map(this::describe)
 				.collect(Collectors.joining("; "));
 		return ErrorBody.toResponse(422, message);
 	}
 	
-	private boolean isClassLevel(ConstraintViolation<?> v)
-	{
-		Object a = v.getConstraintDescriptor().getAnnotation();
-		return a instanceof ValidTimeRange || a instanceof ValidReportInterval;
-	}
-
 	private String describe(ConstraintViolation<?> v)
 	{
 		String property = null;
