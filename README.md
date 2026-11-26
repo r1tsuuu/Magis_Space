@@ -56,6 +56,7 @@ Start with the first red error in the Eclipse Console, not the last one. Most fa
 | `Cannot reach the Magis Space server` in the web page | The app is not running, or runs on another port. Check the Eclipse Console for "Started SpringBootApp". |
 | Notifications are saved but no SMS appears | Start the mock SMS server (see above) before the report. The app logs the failed SMS and carries on. |
 | Mock SMS: `port 8080 is already in use` | See "Running the mock SMS server". |
+| `Access restriction: The type 'HttpServer' is not API`, or "Errors exist in required project" when launching | You have an older commit whose mock SMS server used `com.sun.net.httpserver`, which Eclipse blocks under a Java 8 JRE. Run `git pull` on `main`: the current mock server uses only `java.net`. Then Project > Clean. |
 To start from an empty database, drop `magis_space_db` in phpMyAdmin and run the app again. It creates the database, the tables and the seed data.
 ## Web app
 A browser front end is served by the API itself at `http://localhost:9999/` (files in `src/static/`: `index.html`, `app.js`, `style.css`; plain HTML/CSS/JS, no build step, no CDN, so it works offline). Under Eclipse, non-Java files in `src` are copied to the classpath, so Spring Boot serves them.
