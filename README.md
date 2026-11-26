@@ -24,6 +24,7 @@ This is the finals project for CSCI 181.05.
 
 The app creates the `magis_space_db` database and all tables on first run. `DataLoader` then seeds each empty table: 3 amenities (Outlets, Aircon, Whiteboard), 7 rooms (Faura F-204 and F-227, SEC-A 210, SEC-B 305, CTC 102, Berchmans B-204, Kostka K-301), 1 student (Juan Dela Cruz, `juan.delacruz@example.com`), 1 subscription (that student, building Faura, amenity Outlets), and 2 class schedules for F-204 (Thursday 13:00-14:30 async, Monday 09:00-10:30). Seeding only runs on empty tables, so restarting does not duplicate rows. The app does not need the seed data: everything can be created through the API.
 
+To present the API to an instructor (terminal commands for Windows and macOS, and Postman), follow [DEMO.md](DEMO.md).
 ## Running the mock SMS server
 Notifications are sent as SMS through a small mock of a Twilio-style API in `src/mock/MockSmsServer.java`. It needs only the JDK, no other jar. It is in package `mock`, outside `app`, so Spring does not scan it.
 In Eclipse: right-click `src/mock/MockSmsServer.java`, then Run As > Java Application. Leave its Console tab running; every SMS is printed there. Run the Spring Boot app in its own Console (Eclipse keeps one console per program; use the "Display Selected Console" button to switch).
