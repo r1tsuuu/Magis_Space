@@ -25,14 +25,22 @@ This is the finals project for CSCI 181.05.
 The app creates the `magis_space_db` database and all tables on first run. `DataLoader` then seeds each empty table: 3 amenities (Outlets, Aircon, Whiteboard), 7 rooms (Faura F-204 and F-227, SEC-A 210, SEC-B 305, CTC 102, Berchmans B-204, Kostka K-301), 1 student (Juan Dela Cruz, `juan.delacruz@example.com`), 1 subscription (that student, building Faura, amenity Outlets), and 2 class schedules for F-204 (Thursday 13:00-14:30 async, Monday 09:00-10:30). Seeding only runs on empty tables, so restarting does not duplicate rows. The app does not need the seed data: everything can be created through the API.
 
 ## Running the mock SMS server
-Notifications are sent as SMS through a small mock of a Twilio-style API in `mock-sms/MockSmsServer.java`. It has no dependencies. Run it from a terminal (Java 8):
+Notifications are sent as SMS through a small mock of a Twilio-style API in `src/mock/MockSmsServer.java`. It needs only the JDK, no other jar. It is in package `mock`, outside `app`, so Spring does not scan it.
+In Eclipse: right-click `src/mock/MockSmsServer.java`, then Run As > Java Application. Leave its Console tab running; every SMS is printed there. Run the Spring Boot app in its own Console (Eclipse keeps one console per program; use the "Display Selected Console" button to switch).
+From a terminal (Java 8), in the project folder:
 ```
-cd mock-sms
-javac MockSmsServer.java
-java MockSmsServer          # listens on port 8080; pass a port to change it
+javac -d out src/mock/MockSmsServer.java
+java -cp out mock.MockSmsServer          # listens on port 8080; pass a port to change it
 ```
-It accepts `POST /sms/send` with `{"to": "...", "body": "..."}`, answers `{"sid": "SM...", "status": "queued"}`, and prints each message to the console. The API works without it: if the SMS server is down, the notification is still saved and the failure is only logged.
-
+It accepts `POST /sms/send` with `{"to": "...", "body": "..."}`, answers `{"sid": "SM...", "status": "queued"}`, and prints each message:
+```
+==================== SMS #1 received 14:26:41 ====================
+  To:   09171234567
+  Text: F-204 (Faura) is now vacant as of 2:26 PM.
+  Sid:  SM...
+====================================================================
+```
+If port 8080 is already used (XAMPP Apache sometimes uses it, or an older mock server is still running), it prints an `ERROR: port 8080 is already in use` message and stops. Stop the other program, or give a different port (Run > Run Configurations > Arguments > Program arguments: `8081`) and set `notification.api.url=http://localhost:8081/` in `config/application.properties`. The API works without the mock: if the SMS server is down, the notification is still saved and the failure is only logged.
 ## Web app
 A browser front end is served by the API itself at `http://localhost:9999/` (files in `src/static/`: `index.html`, `app.js`, `style.css`; plain HTML/CSS/JS, no build step, no CDN, so it works offline). Under Eclipse, non-Java files in `src` are copied to the classpath, so Spring Boot serves them.
 - Campus view with one pin per building (vacant / total rooms); click a pin for the floor view with colored room boxes (vacant, occupied, unverified, no data, "likely free" hint).
@@ -250,9 +258,9 @@ Add `--env-var baseUrl=http://localhost:PORT/api` to use another port. The last 
 ## Project layout
 ```
 config/application.properties    database, server and SMS settings
-mock-sms/MockSmsServer.java      mock SMS service (port 8080)
 postman/                         Postman collection
 src/app/SpringBootApp.java       entry point
+src/mock/MockSmsServer.java      mock SMS service (port 8080), run as a Java Application
 src/app/entity/                  JPA entities
 src/app/repository/              Spring Data repositories
 src/app/service/                 business logic
