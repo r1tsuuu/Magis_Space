@@ -143,28 +143,99 @@ function drawCampus() {
   if (!b.length) { map.appendChild(el('div', 'skeleton', 'No buildings yet.')); return; }
   var placed = b.filter(function (x) { return x.latitude != null && x.longitude != null; });
   var loose = b.filter(function (x) { return x.latitude == null || x.longitude == null; });
-  var minLa = Math.min.apply(null, placed.map(function (x) { return x.latitude; })), maxLa = Math.max.apply(null, placed.map(function (x) { return x.latitude; }));
-  var minLo = Math.min.apply(null, placed.map(function (x) { return x.longitude; })), maxLo = Math.max.apply(null, placed.map(function (x) { return x.longitude; }));
-  function pin(x, left, top) {
+  function makePin(x) {
     var p = el('button', 'pin' + (x.vacantCount > 0 ? ' has' : ''));
-    p.type = 'button'; p.style.left = left + '%'; p.style.top = top + '%';
+    p.type = 'button';
     p.title = x.building + ': ' + x.vacantCount + ' of ' + x.totalRooms + ' rooms vacant';
     var bub = el('div', 'bubble');
     bub.appendChild(el('div', 'bn', x.building));
     var bc = el('div', 'bc'); bc.appendChild(el('i')); bc.appendChild(el('span', '', x.vacantCount + ' / ' + x.totalRooms + ' vacant'));
     bub.appendChild(bc); p.appendChild(bub); p.appendChild(el('div', 'tip'));
     p.addEventListener('click', function () { showBuilding(x.building); });
-    map.appendChild(p);
+    return p;
   }
-  placed.forEach(function (x) {
-    var fx = maxLo > minLo ? (x.longitude - minLo) / (maxLo - minLo) : .5;
-    var fy = maxLa > minLa ? (maxLa - x.latitude) / (maxLa - minLa) : .5;
-    pin(x, 12 + fx * 76, 26 + fy * 62);
-  });
-  loose.forEach(function (x, i) { pin(x, 12 + i * 14, 94); });
-  if (loose.length) { var n = el('div', 'unplaced', 'Buildings without coordinates are listed along the bottom.'); map.appendChild(n); }
+  var canvas = el('div', 'canvas'); map.appendChild(canvas);
+  var pins = placed.map(function (x) { var p = makePin(x); canvas.appendChild(p); return { b: x, el: p }; });
+  if (loose.length) {
+    var foot = el('div', 'unplaced');
+    foot.appendChild(el('span', 'ul', 'No coordinates yet:'));
+    loose.forEach(function (x) { var p = makePin(x); p.classList.add('static'); foot.appendChild(p); });
+    map.appendChild(foot);
+  }
+  if (!pins.length) { canvas.style.height = '0'; return; }
+  layoutPins(canvas, pins);
+  var n = el('div', 'north', 'N'); canvas.appendChild(n);
+  map.appendChild(el('div', 'mapnote', 'Schematic map: buildings keep their north-south and east-west order. Pins are nudged apart when close together.'));
 }
-
+// Projects buildings from latitude/longitude into the canvas (one scale for both axes), then pushes
+// overlapping pins to the nearest free spot. If they still cannot fit (many buildings, narrow screen) it falls back to a tidy grid.
+function layoutPins(canvas, pins) {
+  var W = canvas.clientWidth || 600;
+  var H = W < 640 ? 440 : Math.max(400, Math.min(560, Math.round(W * 0.46)));
+  canvas.style.height = H + 'px';
+  var GAP = 8, EDGE = 8;
+  pins.forEach(function (p) { p.w = p.el.offsetWidth; p.h = p.el.offsetHeight; });
+  var las = pins.map(function (p) { return p.b.latitude; }), los = pins.map(function (p) { return p.b.longitude; });
+  var minLa = Math.min.apply(null, las), maxLa = Math.max.apply(null, las), minLo = Math.min.apply(null, los), maxLo = Math.max.apply(null, los);
+  var maxW = Math.max.apply(null, pins.map(function (p) { return p.w; })), maxH = Math.max.apply(null, pins.map(function (p) { return p.h; }));
+  var padX = maxW / 2 + EDGE, padT = maxH + EDGE, padB = EDGE + 6;
+  // Positions keep the north-south and east-west order of the real coordinates, stretched to fill the canvas.
+  var availW = W - 2 * padX, availH = H - padT - padB;
+  // Half real distance, half rank order, so one far-away building does not squeeze all the others together.
+  function frac(vals, v, min, max) {
+    var u = vals.filter(function (x, i) { return vals.indexOf(x) === i; }).sort(function (a, b) { return a - b; });
+    var lin = max > min ? (v - min) / (max - min) : 0.5, rank = u.length > 1 ? u.indexOf(v) / (u.length - 1) : 0.5;
+    return 0.5 * lin + 0.5 * rank;
+  }
+  pins.forEach(function (p) {
+    p.tx = padX + frac(los, p.b.longitude, minLo, maxLo) * availW;
+    p.ty = padT + (1 - frac(las, p.b.latitude, minLa, maxLa)) * availH;
+    p.cx0 = p.tx; p.cy0 = p.ty - p.h / 2;
+  });
+  // Place pins one by one (north first) at the nearest free spot to their real position.
+  var offsets = [];
+  for (var ddx = -W; ddx <= W; ddx += 8) for (var ddy = -H; ddy <= H; ddy += 8) offsets.push([ddx, ddy, ddx * ddx + ddy * ddy]);
+  offsets.sort(function (m, n) { return m[2] - n[2]; });
+  var ok = true, done = [];
+  pins.slice().sort(function (p, q) { return p.ty - q.ty || p.tx - q.tx; }).forEach(function (p) {
+    if (!ok) return;
+    var found = false;
+    for (var k = 0; k < offsets.length && !found; k++) {
+      var cx = p.cx0 + offsets[k][0], cy = p.cy0 + offsets[k][1];
+      if (cx < p.w / 2 + EDGE || cx > W - p.w / 2 - EDGE || cy < p.h / 2 + EDGE || cy > H - p.h / 2 - EDGE) continue;
+      var free = done.every(function (q) { return Math.abs(q.cx - cx) >= (q.w + p.w) / 2 + GAP || Math.abs(q.cy - cy) >= (q.h + p.h) / 2 + GAP; });
+      if (free) { p.cx = cx; p.cy = cy; found = true; }
+    }
+    if (found) done.push(p); else ok = false;
+  });
+  if (!ok) {
+    canvas.parentNode.setAttribute('data-grid', '1');
+    var order = pins.slice().sort(function (p, q) { return q.b.latitude - p.b.latitude || p.b.longitude - q.b.longitude; });
+    var cols = Math.max(1, Math.floor((W - 2 * EDGE + GAP) / (maxW + GAP)));
+    var rows = Math.ceil(order.length / cols);
+    var cellW = (W - 2 * EDGE) / cols;
+    canvas.style.height = Math.max(rows * (maxH + GAP) + 2 * EDGE + 6, W < 640 ? 0 : 400) + 'px';
+    order.forEach(function (p, i) {
+      p.cx = EDGE + cellW * (i % cols) + cellW / 2; p.cy = EDGE + Math.floor(i / cols) * (maxH + GAP) + maxH / 2; p.grid = true;
+    });
+  } else if (W >= 640) {
+    var NS = 'http://www.w3.org/2000/svg', svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('class', 'links'); svg.setAttribute('width', W); svg.setAttribute('height', H);
+    pins.forEach(function (p) {
+      var ex = p.cx, ey = p.cy + p.h / 2, d = Math.sqrt((ex - p.tx) * (ex - p.tx) + (ey - p.ty) * (ey - p.ty));
+      if (d > 50) {
+        var l = document.createElementNS(NS, 'line');
+        l.setAttribute('x1', p.tx); l.setAttribute('y1', p.ty); l.setAttribute('x2', ex); l.setAttribute('y2', ey);
+        svg.appendChild(l);
+      }
+      var dot = document.createElementNS(NS, 'circle');
+      dot.setAttribute('cx', p.tx); dot.setAttribute('cy', p.ty); dot.setAttribute('r', 3.5);
+      svg.appendChild(dot);
+    });
+    canvas.insertBefore(svg, canvas.firstChild);
+  }
+  pins.forEach(function (p) { p.el.style.left = p.cx + 'px'; p.el.style.top = (p.cy + p.h / 2) + 'px'; });
+}
 function roomBox(r) {
   var box = el('div', 'room ' + r.status);
   var rn = el('div', 'rn'); rn.appendChild(el('span', '', r.name)); rn.appendChild(el('small', '', 'Floor ' + r.floor)); box.appendChild(rn);
@@ -197,28 +268,12 @@ function drawFloor() {
     c.addEventListener('click', function () { state.view.floor = f; drawFloor(); });
     fl.appendChild(c);
   });
-  var rooms = all.filter(function (r) { return r.floor === state.view.floor; });
+  var rooms = all.filter(function (r) { return r.floor === state.view.floor; })
+    .sort(function (a, b) { return a.name.localeCompare(b.name, undefined, { numeric: true }); });
   clear(map); map.className = 'map floor';
   if (!rooms.length) { map.appendChild(el('div', 'skeleton', 'No rooms in this building yet.')); return; }
-  var positioned = rooms.every(function (r) { return r.mapX != null && r.mapY != null; }) && rooms.length > 1 && window.innerWidth > 640;
   rooms.forEach(function (r) { map.appendChild(roomBox(r)); });
-  if (!positioned) return;
-  map.className = 'map floor abs';
-  var W = map.clientWidth, H = map.clientHeight, bw = 200, bh = 140, pad = 16;
-  var xs = rooms.map(function (r) { return r.mapX; }), ys = rooms.map(function (r) { return r.mapY; });
-  var minX = Math.min.apply(null, xs), maxX = Math.max.apply(null, xs), minY = Math.min.apply(null, ys), maxY = Math.max.apply(null, ys);
-  function axis(v, min, max, size, box) {
-    var range = max - min, avail = size - box - 2 * pad;
-    var k = range > 0 ? Math.min(avail / range, 16) : 0;
-    var start = (size - box - range * k) / 2;
-    return start + (v - min) * k;
-  }
-  var pos = rooms.map(function (r) { return { x: axis(r.mapX, minX, maxX, W, bw), y: axis(r.mapY, minY, maxY, H, bh) }; });
-  var overlap = pos.some(function (p, i) { return pos.some(function (q, j) { return j > i && Math.abs(p.x - q.x) < bw + 8 && Math.abs(p.y - q.y) < bh + 8; }); });
-  if (overlap) { map.className = 'map floor'; return; }
-  Array.prototype.forEach.call(map.children, function (c, i) { c.style.left = pos[i].x + 'px'; c.style.top = pos[i].y + 'px'; });
 }
-
 /* ---------- room list ---------- */
 function loadList() {
   var q = [];
@@ -377,7 +432,11 @@ function refreshAll(quiet) {
   });
 }
 $('refreshBtn').addEventListener('click', function () { refreshAll(true); });
-var rt; window.addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(function () { if (state.view.building) drawFloor(); }, 200); });
+var rt, lastW = window.innerWidth;
+window.addEventListener('resize', function () {
+  clearTimeout(rt);
+  rt = setTimeout(function () { if (!state.view.building && window.innerWidth !== lastW) drawCampus(); lastW = window.innerWidth; }, 200);
+});
 
 Promise.all([loadBuildings(), loadAmenities(), loadStudents()]).then(function () {
   return Promise.all([refreshMap(), loadList(), loadPersonal(true)]);
