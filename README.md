@@ -41,6 +41,21 @@ It accepts `POST /sms/send` with `{"to": "...", "body": "..."}`, answers `{"sid"
 ====================================================================
 ```
 If port 8080 is already used (XAMPP Apache sometimes uses it, or an older mock server is still running), it prints an `ERROR: port 8080 is already in use` message and stops. Stop the other program, or give a different port (Run > Run Configurations > Arguments > Program arguments: `8081`) and set `notification.api.url=http://localhost:8081/` in `config/application.properties`. The API works without the mock: if the SMS server is down, the notification is still saved and the failure is only logged.
+## Troubleshooting
+Start with the first red error in the Eclipse Console, not the last one. Most failures are one of these.
+| What you see | What to do |
+|---|---|
+| Many red errors in Eclipse, "The import app... cannot be resolved", or a red X on the project | The jars come from the `SpringBootDependencies` project. It must be imported into the same workspace, and its name must be exactly `SpringBootDependencies` (check Project Explorer; rename it if needed). Then Project > Clean... > Clean all projects, and wait for the build to finish. |
+| "Unsupported major.minor version" or "release version 17 not supported" | The project needs Java 8. Right-click the project > Properties > Java Build Path > Libraries > JRE System Library > Edit, and choose JavaSE-1.8. Also check Java Compiler > compiler compliance level is 1.8. Then Project > Clean. |
+| `package retrofit2.converter... does not exist` or `cannot be resolved` for a converter class | You have an older commit. Older commits needed an extra Retrofit converter jar. Run `git pull` on `main`: the current code needs no extra jar. Then Project > Clean. |
+| `CommunicationsException: Communications link failure` and `Connection refused`, ending with `Application run failed` | MySQL is not running. Open the XAMPP control panel and click Start next to MySQL (it must turn green; the port is normally 3306). Run the app again. If MySQL uses another port, change `3306` in `spring.datasource.url`. |
+| `Access denied for user 'root'` | The app uses user `root` with no password, the XAMPP default. If you set a MySQL password, put it in `spring.datasource.password`. |
+| `APPLICATION FAILED TO START ... Port 9999 was already in use` | Another program uses the port, often a previous run of this app that is still going. In Eclipse, press the red Terminate square in the Console (or the Debug view) for the old run. Or change `server.port` in `config/application.properties` (for example `9998`) and use that port in the URL; for Postman set the `baseUrl` variable, for newman pass `--env-var baseUrl=http://localhost:9998/api`. |
+| The browser shows 404 at `http://localhost:9999/` | Use `http://localhost:9999/` (not `/api`). Project > Clean makes Eclipse copy `src/static` again. Check that `src/static/index.html` exists. |
+| `Cannot reach the Magis Space server` in the web page | The app is not running, or runs on another port. Check the Eclipse Console for "Started SpringBootApp". |
+| Notifications are saved but no SMS appears | Start the mock SMS server (see above) before the report. The app logs the failed SMS and carries on. |
+| Mock SMS: `port 8080 is already in use` | See "Running the mock SMS server". |
+To start from an empty database, drop `magis_space_db` in phpMyAdmin and run the app again. It creates the database, the tables and the seed data.
 ## Web app
 A browser front end is served by the API itself at `http://localhost:9999/` (files in `src/static/`: `index.html`, `app.js`, `style.css`; plain HTML/CSS/JS, no build step, no CDN, so it works offline). Under Eclipse, non-Java files in `src` are copied to the classpath, so Spring Boot serves them.
 - Campus view with one pin per building (vacant / total rooms); click a pin for the floor view with colored room boxes (vacant, occupied, unverified, no data, "likely free" hint).
