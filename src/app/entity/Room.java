@@ -45,17 +45,9 @@ public class Room
 	@Min(1)
 	private int capacity;
 	
-	@Column
-	private Double mapX;
 	
-	@Column
-	private Double mapY;
 	
-	@Column
-	private Double latitude;
 	
-	@Column
-	private Double longitude;
 	
 	@ManyToMany(fetch = FetchType.EAGER)
 	@JoinTable(
@@ -70,17 +62,12 @@ public class Room
 		
 	}
 
-	public Room(Long id, String name, String building, int floor, int capacity,
-			Double mapX, Double mapY, Double latitude, Double longitude) {
+	public Room(Long id, String name, String building, int floor, int capacity) {
 		this.id = id;
 		this.name = name;
 		this.building = building;
 		this.floor = floor;
 		this.capacity = capacity;
-		this.mapX = mapX;
-		this.mapY = mapY;
-		this.latitude = latitude;
-		this.longitude = longitude;
 	}
 
 	public Long getId() {
@@ -123,38 +110,6 @@ public class Room
 		this.capacity = capacity;
 	}
 
-	public Double getMapX() {
-		return mapX;
-	}
-
-	public void setMapX(Double mapX) {
-		this.mapX = mapX;
-	}
-
-	public Double getMapY() {
-		return mapY;
-	}
-
-	public void setMapY(Double mapY) {
-		this.mapY = mapY;
-	}
-
-	public Double getLatitude() {
-		return latitude;
-	}
-
-	public void setLatitude(Double latitude) {
-		this.latitude = latitude;
-	}
-
-	public Double getLongitude() {
-		return longitude;
-	}
-
-	public void setLongitude(Double longitude) {
-		this.longitude = longitude;
-	}
-
 	public Set<Amenity> getAmenities() {
 		return amenities;
 	}
@@ -166,8 +121,7 @@ public class Room
 	@Override
 	public String toString() {
 		return "Room [id=" + id + ", name=" + name + ", building=" + building + ", floor=" + floor + ", capacity="
-				+ capacity + ", mapX=" + mapX + ", mapY=" + mapY + ", latitude=" + latitude + ", longitude=" + longitude
-				+ "]";
+				+ capacity + "]";
 	}
 
 }

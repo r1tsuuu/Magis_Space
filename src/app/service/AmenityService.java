@@ -10,7 +10,6 @@ import app.entity.Amenity;
 import app.entity.Room;
 import app.repository.AmenityRepository;
 import app.repository.RoomRepository;
-import app.repository.SubscriptionRepository;
 import app.rest.dto.AmenityRequest;
 import app.rest.errorhandlers.ApiException;
 
@@ -22,9 +21,6 @@ public class AmenityService
 
 	@Autowired
 	private RoomRepository roomRepo;
-
-	@Autowired
-	private SubscriptionRepository subscriptionRepo;
 
 	public List<Amenity> findAll()
 	{
@@ -58,7 +54,6 @@ public class AmenityService
 			room.getAmenities().removeIf(a -> id.equals(a.getId()));
 			roomRepo.save(room);
 		}
-		subscriptionRepo.deleteByAmenity(amenity);
 		repo.delete(amenity);
 	}
 }

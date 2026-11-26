@@ -17,13 +17,9 @@ import javax.ws.rs.core.Response;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import app.entity.Notification;
 import app.entity.Student;
-import app.entity.Subscription;
 import app.rest.dto.StudentRequest;
-import app.service.NotificationService;
 import app.service.StudentService;
-import app.service.SubscriptionService;
 
 @Component
 @Path("/students")
@@ -31,12 +27,6 @@ public class StudentController
 {
 	@Autowired
 	StudentService service;
-
-	@Autowired
-	SubscriptionService subscriptionService;
-
-	@Autowired
-	NotificationService notificationService;
 
 	@GET
 	@Produces(MediaType.APPLICATION_JSON)
@@ -67,21 +57,5 @@ public class StudentController
 	{
 		service.delete(id);
 		return Response.noContent().build();
-	}
-
-	@GET
-	@Path("/{id}/subscriptions")
-	@Produces(MediaType.APPLICATION_JSON)
-	public List<Subscription> getSubscriptions(@PathParam("id") Long id)
-	{
-		return subscriptionService.findByStudent(id);
-	}
-
-	@GET
-	@Path("/{id}/notifications")
-	@Produces(MediaType.APPLICATION_JSON)
-	public List<Notification> getNotifications(@PathParam("id") Long id)
-	{
-		return notificationService.findByStudent(id);
 	}
 }

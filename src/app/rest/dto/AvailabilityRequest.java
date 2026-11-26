@@ -2,9 +2,6 @@ package app.rest.dto;
 
 import javax.validation.constraints.NotNull;
 
-import app.validation.ValidReportInterval;
-
-@ValidReportInterval
 public class AvailabilityRequest
 {
 	@NotNull

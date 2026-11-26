@@ -7,14 +7,15 @@ import javax.persistence.GenerationType;
 import javax.persistence.Id;
 import javax.persistence.JoinColumn;
 import javax.persistence.ManyToOne;
-import javax.validation.constraints.Min;
-import javax.validation.constraints.NotBlank;
+import javax.persistence.Table;
+import javax.persistence.UniqueConstraint;
 import javax.validation.constraints.NotNull;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 @Entity(name = "subscription_table")
+@Table(name = "subscription_table", uniqueConstraints = @UniqueConstraint(columnNames = {"student_id", "room_id"}))
 public class Subscription 
 {
 	@Id
@@ -27,28 +28,19 @@ public class Subscription
 	@NotNull
 	private Student student;
 
-	@Column
-	@NotBlank
-	private String building;
-
-	@Column
-	@Min(1)
-	private Integer minCapacity;
-
 	@ManyToOne
-	@JoinColumn(name = "amenity_id")
-	private Amenity amenity;
+	@JoinColumn(name = "room_id")
+	@NotNull
+	private Room room;
 
 	public Subscription()
 	{
 	}
 
-	public Subscription(Long id, Student student, String building, Integer minCapacity, Amenity amenity) {
+	public Subscription(Long id, Student student, Room room) {
 		this.id = id;
 		this.student = student;
-		this.building = building;
-		this.minCapacity = minCapacity;
-		this.amenity = amenity;
+		this.room = room;
 	}
 
 	public Long getId() {
@@ -73,39 +65,19 @@ public class Subscription
 		return student == null ? null : student.getId();
 	}
 
-	public String getBuilding() {
-		return building;
-	}
-
-	public void setBuilding(String building) {
-		this.building = building;
-	}
-
-	public Integer getMinCapacity() {
-		return minCapacity;
-	}
-
-	public void setMinCapacity(Integer minCapacity) {
-		this.minCapacity = minCapacity;
-	}
-
 	@JsonIgnore
-	public Amenity getAmenity() {
-		return amenity;
+	public Room getRoom() {
+		return room;
 	}
-
-	public void setAmenity(Amenity amenity) {
-		this.amenity = amenity;
+	public void setRoom(Room room) {
+		this.room = room;
 	}
-
-	@JsonProperty("amenity")
-	public String amenityName() {
-		return amenity == null ? null : amenity.getName();
+	@JsonProperty("roomId")
+	public Long roomId() {
+		return room == null ? null : room.getId();
 	}
-
 	@Override
 	public String toString() {
-		return "Subscription [id=" + id + ", studentId=" + studentId() + ", building=" + building
-				+ ", minCapacity=" + minCapacity + ", amenity=" + amenityName() + "]";
+		return "Subscription [id=" + id + ", studentId=" + studentId() + ", roomId=" + roomId() + "]";
 	}
 }

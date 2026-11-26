@@ -3,9 +3,7 @@ package app.service;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.Locale;
 
 import org.slf4j.Logger;
@@ -52,9 +50,13 @@ public class NotificationService
 	@Autowired
 	private SmsClient smsClient;
 
-	public List<Notification> findAll()
+	public List<Notification> findAll(Long studentId)
 	{
-		return repo.findAll();
+		if (studentId != null)
+		{
+			return repo.findByStudentOrderBySentAtDescIdDesc(studentService.get(studentId));
+		}
+		return repo.findAllByOrderBySentAtDescIdDesc();
 	}
 
 	public Notification get(Long id)
@@ -63,45 +65,28 @@ public class NotificationService
 				.orElseThrow(() -> new ApiException(404, "Notification with ID " + id + " does not exist."));
 	}
 
-	public List<Notification> findByStudent(Long studentId)
-	{
-		return repo.findByStudentOrderBySentAtDesc(studentService.get(studentId));
-	}
-
 	public void delete(Long id)
 	{
 		repo.delete(get(id));
 	}
 
-	public void notifyMatchingSubscribers(Room room, Long excludeStudentId)
+	public void notifySubscribers(Room room)
 	{
-		try
+		String message = truncate(room.getName() + " (" + room.getBuilding() + ") is now vacant as of "
+				+ TIME_FORMAT.format(LocalDateTime.now()) + ".");
+		for (Subscription sub : subscriptionRepo.findByRoom(room))
 		{
-			String message = truncate("" + room.getName() + " (" + room.getBuilding() + ") is now vacant as of "
-					+ TIME_FORMAT.format(LocalDateTime.now()) + ".");
-			Set<Long> notified = new HashSet<>();
-			for (Subscription sub : subscriptionRepo.findMatchingForRoom(room))
+			try
 			{
-				Student student = sub.getStudent();
-				if (student == null || student.getId().equals(excludeStudentId) || !notified.add(student.getId()))
-				{
-					continue;
-				}
-				try
-				{
-					send(student, message);
-				}
-				catch (RuntimeException e)
-				{
-					log.warn("Could not notify student {}: {}", student.getId(), e.toString());
-				}
+				send(sub.getStudent(), message);
+			}
+			catch (RuntimeException e)
+			{
+				log.warn("Could not notify student {}: {}", sub.getStudent().getId(), e.toString());
 			}
 		}
-		catch (RuntimeException e)
-		{
-			log.warn("Could not notify subscribers of room {}: {}", room.getId(), e.toString());
-		}
 	}
+
 	static String truncate(String message)
 	{
 		if (message.length() <= MAX_MESSAGE)
